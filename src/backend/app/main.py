@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api_store import ApiStore, Conflict
+from app.api_store import AdmissionError, ApiStore, Conflict
 from app.config import ROOT, Settings
 from app.contracts.chat import (
     AckInput,
@@ -36,6 +36,42 @@ from app.contracts.weather import WeatherFact, WeatherRequest
 from app.workers.coordinator import Coordinator
 
 
+class BodyTooLarge(HTTPException):
+    def __init__(self):
+        super().__init__(413, "Nội dung yêu cầu vượt giới hạn cho phép.")
+
+
+class RequestBodyLimitMiddleware:
+    """Count actual streamed bytes before JSON parsing; headers cannot bypass it."""
+
+    def __init__(self, app, *, get_limit):
+        self.app, self.get_limit = app, get_limit
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        limit = self.get_limit()
+        headers = dict(scope.get("headers", []))
+        try:
+            announced = int(headers.get(b"content-length", b"0"))
+        except ValueError:
+            announced = 0
+        if announced > limit:
+            return await JSONResponse({"code": "REQUEST_BODY_TOO_LARGE", "message": "Nội dung yêu cầu vượt giới hạn cho phép.", "retryable": False}, status_code=413)(scope, receive, send)
+        consumed = 0
+
+        async def bounded_receive():
+            nonlocal consumed
+            message = await receive()
+            if message["type"] == "http.request":
+                consumed += len(message.get("body", b""))
+                if consumed > limit:
+                    raise BodyTooLarge()
+            return message
+
+        await self.app(scope, bounded_receive, send)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app):
@@ -43,15 +79,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         config = settings or Settings.load()
         app.state.config = config
-        app.state.creation_locks = {}
-        store = ApiStore(config.database_path)
+        app.state.creation_lock = asyncio.Lock()
+        store = ApiStore(config.database_path, limits=config)
         app.state.store = store
         async with conversation_runtime(config) as (engine, graph):
             app.state.engine = engine
             app.state.graph = graph
-            coordinator = Coordinator(store, graph)
+            coordinator = Coordinator(store, graph, concurrency=config.worker_concurrency)
             app.state.coordinator = coordinator
             runner = asyncio.create_task(coordinator.run())
+            app.state.runner = runner
             try:
                 yield
             finally:
@@ -72,7 +109,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="ParrotGo · Chat đặt xe thử nghiệm", version="2.0.0", lifespan=lifespan,
                   responses={401:{"model":HttpError}, 404:{"model":HttpError},
                              403:{"model":PublicError}, 409:{"model":PublicError},
-                             422:{"model":PublicError}})
+                             413:{"model":PublicError}, 422:{"model":PublicError},
+                             429:{"model":PublicError}})
+    app.add_middleware(RequestBodyLimitMiddleware, get_limit=lambda: getattr(app.state, "config", settings).max_request_body_bytes)
+
+    @app.exception_handler(BodyTooLarge)
+    async def body_too_large(request, error):
+        return JSONResponse({"code": "REQUEST_BODY_TOO_LARGE", "message": error.detail, "retryable": False}, status_code=413)
+
+    @app.exception_handler(AdmissionError)
+    async def admission_rejected(request, error):
+        wait = error.retry_after_seconds
+        return JSONResponse({"code": error.code, "message": str(error), "retryable": wait is not None},
+            status_code=429, headers={"Retry-After": str(wait)} if wait is not None else {})
 
     @app.middleware("http")
     async def origin_guard(request: Request, call_next):
@@ -157,8 +206,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def health():
         return {"status": "ok"}
 
-    @app.get("/api/ready", response_model=ReadyResponse)
+    @app.get("/api/ready", response_model=ReadyResponse, responses={503: {"model": PublicError}})
     async def ready():
+        runner = getattr(app.state, "runner", None)
+        if runner is None or runner.done():
+            return JSONResponse({"code": "WORKER_UNAVAILABLE", "message": "Bộ xử lý hội thoại chưa sẵn sàng.", "retryable": True}, status_code=503)
+        try:
+            with app.state.store.connection() as db:
+                initialized = db.execute("SELECT 1 FROM api_meta LIMIT 1").fetchone()
+            if not initialized:
+                raise RuntimeError("store is not initialized")
+        except Exception:
+            return JSONResponse({"code": "STORE_UNAVAILABLE", "message": "Kho dữ liệu hội thoại chưa sẵn sàng.", "retryable": True}, status_code=503)
         return {"status": "ready", **public_config()}
 
     @app.get("/api/bootstrap", response_model=Bootstrap)
@@ -178,15 +237,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/sessions", response_model=ChatSnapshot)
     async def sessions(request: Request, body: SessionInput):
         owner_id = owner(request)
-        lock_key = (owner_id, body.client_session_key)
-        lock = app.state.creation_locks.setdefault(lock_key, asyncio.Lock())
-        async with lock:
+        async with app.state.creation_lock:
             session_id = app.state.store.find_session(owner_id, body.client_session_key)
             if not session_id:
                 session_id = "session_" + uuid.uuid4().hex
                 state = app.state.engine.new_state(session_id)
-                await app.state.graph.initialize(session_id, state)
-                app.state.store.create_session(session_id, owner_id, body.client_session_key, state)
+                session_id = app.state.store.create_session(session_id, owner_id, body.client_session_key, state)
+            else:
+                state = app.state.store.snapshot(session_id)["state"]
+            # If initialization failed after durable admission, the same client
+            # key repairs that session on retry instead of creating another one.
+            await app.state.graph.initialize(session_id, state)
         return projection(app.state.store.snapshot(session_id))
 
     @app.get("/api/sessions/{session_id}", response_model=ChatSnapshot)

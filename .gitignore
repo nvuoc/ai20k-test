@@ -16,3 +16,9 @@ src/frontend/playwright-report/
 logs/
 src/backend/.test-tmp*/
 src/backend/.pytest-temp*/
+.pytest-temp*/
+.test-tmp*/
+deploy/backups/
+deploy/.backup.lock
+deploy/.caddy-hash.*
+deploy/*.tar.gz

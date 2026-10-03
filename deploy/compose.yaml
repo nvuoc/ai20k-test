@@ -1,0 +1,84 @@
+name: parrotgo
+
+services:
+  app:
+    image: parrotgo:local
+    pull_policy: never
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      # These values are enforced for this HTTPS deployment.
+      COOKIE_SECURE: "true"
+      ALLOWED_ORIGINS: "https://${DOMAIN:?Set DOMAIN in deploy/.env}"
+      APP_SECRET: "${APP_SECRET:?Run bash deploy/setup.sh first}"
+      BUSINESS_DB_PATH: /app/backend/data/app.sqlite
+      CHECKPOINT_DB_PATH: /app/backend/data/checkpoints.sqlite
+      GEMINI_RATE_DB_PATH: /app/backend/data/gemini_rate.sqlite
+      GROQ_RATE_DB_PATH: /app/backend/data/groq_rate.sqlite
+    volumes:
+      - app_data:/app/backend/data
+    expose:
+      - "8000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 1g
+    stop_grace_period: 45s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/ready', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      DOMAIN: "${DOMAIN:?Set DOMAIN in deploy/.env}"
+      ACME_EMAIL: "${ACME_EMAIL:?Set ACME_EMAIL in deploy/.env}"
+      BETA_USER: "${BETA_USER:?Set BETA_USER in deploy/.env}"
+      BETA_PASSWORD_HASH: "${BETA_PASSWORD_HASH:?Run bash deploy/setup.sh first}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  app_data:
+    name: parrotgo_app_data
+  caddy_data:
+    name: parrotgo_caddy_data
+  caddy_config:
+    name: parrotgo_caddy_config

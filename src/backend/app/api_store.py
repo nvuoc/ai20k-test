@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import sqlite3
 import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+
+from app.config import Settings
 
 
 def now() -> str:
@@ -23,9 +26,20 @@ class Conflict(Exception):
     pass
 
 
+class AdmissionError(Exception):
+    """Safe rejection before accepting new work; existing receipts stay valid."""
+
+    def __init__(self, code, message, *, retry_after_seconds=None):
+        super().__init__(message)
+        self.code = code
+        self.retry_after_seconds = retry_after_seconds
+
+
 class ApiStore:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, limits: Settings | None = None, clock=None):
         self.path = Path(path)
+        self.limits = limits or Settings()
+        self.clock = clock or time.time
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as db:
             db.executescript("""
@@ -61,6 +75,10 @@ class ApiStore:
             CREATE TABLE IF NOT EXISTS api_quota_retries (
               event_id TEXT PRIMARY KEY REFERENCES api_inbox(id),
               http_attempt INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS api_admission_requests (
+              bucket TEXT NOT NULL, reserved_at REAL NOT NULL);
+            CREATE INDEX IF NOT EXISTS api_admission_bucket_time
+              ON api_admission_requests(bucket,reserved_at);
             INSERT OR IGNORE INTO api_meta VALUES('schema','chat-api-2');
             """)
 
@@ -92,10 +110,34 @@ class ApiStore:
 
     def create_session(self, session_id, owner, client_key, state):
         with self.connection(write=True) as db:
+            existing = db.execute("SELECT id FROM api_sessions WHERE owner=? AND client_key=?", (owner, client_key)).fetchone()
+            if existing:
+                return existing["id"]
+            count = db.execute("SELECT COUNT(*) FROM api_sessions WHERE owner=?", (owner,)).fetchone()[0]
+            if count >= self.limits.max_sessions_per_owner:
+                raise AdmissionError("OWNER_SESSION_LIMIT", "Bạn đã đạt giới hạn phiên thử nghiệm. Hãy tiếp tục phiên hiện có hoặc liên hệ người quản trị.")
+            count = db.execute("SELECT COUNT(*) FROM api_sessions").fetchone()[0]
+            if count >= self.limits.max_sessions_total:
+                raise AdmissionError("SESSION_CAPACITY", "Hệ thống thử nghiệm đã đạt giới hạn phiên. Người quản trị cần kiểm tra dung lượng.")
+            self._reserve_admission(db, owner)
             db.execute("INSERT INTO api_sessions(id,owner,client_key,projection,created_at) "
                        "VALUES(?,?,?,?,?)", (session_id, owner, client_key, encode(state), now()))
             self._event(db, session_id, f"{session_id}:welcome", "assistant_response",
                         state["last_response"])
+            return session_id
+
+    def _reserve_admission(self, db, owner):
+        """One atomic rolling window for accepted new sessions/events only."""
+        timestamp = self.clock()
+        db.execute("DELETE FROM api_admission_requests WHERE reserved_at<=?", (timestamp-60,))
+        buckets = (("global", self.limits.inbound_global_rpm),
+                   ("owner:" + hashlib.sha256(owner.encode()).hexdigest(), self.limits.inbound_owner_rpm))
+        for bucket, limit in buckets:
+            count, oldest = db.execute("SELECT COUNT(*),MIN(reserved_at) FROM api_admission_requests WHERE bucket=?", (bucket,)).fetchone()
+            if count >= limit:
+                raise AdmissionError("INBOUND_RATE_LIMITED", "Bạn gửi yêu cầu quá nhanh. Hãy chờ một chút rồi thử lại.",
+                    retry_after_seconds=max(1, math.ceil(oldest+60-timestamp)))
+        db.executemany("INSERT INTO api_admission_requests(bucket,reserved_at) VALUES(?,?)", [(bucket, timestamp) for bucket, _ in buckets])
 
     def owned(self, session_id, owner):
         with self.connection() as db:
@@ -122,8 +164,15 @@ class ApiStore:
                                  (session_id,)).fetchone()
             if blocked:
                 raise Conflict("SESSION_NEEDS_SUPPORT")
-            row = db.execute("SELECT latest_seq FROM api_sessions WHERE id=?",
+            row = db.execute("SELECT latest_seq,owner FROM api_sessions WHERE id=?",
                              (session_id,)).fetchone()
+            count = db.execute("SELECT COUNT(*) FROM api_inbox WHERE session_id=? AND status IN ('queued','processing')", (session_id,)).fetchone()[0]
+            if count >= self.limits.max_pending_per_session:
+                raise AdmissionError("SESSION_QUEUE_FULL", "Phiên này đang có nhiều tin nhắn chờ xử lý. Bạn chờ bot trả lời trước khi gửi thêm nhé.", retry_after_seconds=5)
+            count = db.execute("SELECT COUNT(*) FROM api_inbox WHERE status IN ('queued','processing')").fetchone()[0]
+            if count >= self.limits.max_pending_total:
+                raise AdmissionError("INBOX_CAPACITY", "Hệ thống đang bận. Bạn thử gửi lại sau một chút nhé.", retry_after_seconds=5)
+            self._reserve_admission(db, row["owner"])
             seq = row["latest_seq"] + 1
             event_id = "evt_" + uuid.uuid4().hex
             self._record_rendered(db, session_id, payload.get("rendered_response_ids", []), event_id)
@@ -160,7 +209,8 @@ class ApiStore:
                 "ON r.event_id=i.id WHERE i.status IN ('queued','processing') "
                 "AND (r.event_id IS NULL OR (r.status!='exhausted' AND r.next_at<=?)) "
                 "AND NOT EXISTS (SELECT 1 FROM api_inbox earlier WHERE earlier.session_id=i.session_id "
-                "AND earlier.status IN ('queued','processing') AND earlier.seq<i.seq)", (time.time(),))]
+                "AND earlier.status IN ('queued','processing') AND earlier.seq<i.seq) "
+                "ORDER BY i.created_at,i.id", (time.time(),))]
 
     def next_pending(self, session_id):
         with self.connection(write=True) as db:

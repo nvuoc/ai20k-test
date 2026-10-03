@@ -1,0 +1,24 @@
+# Allowlist the build context, so local secrets, data and test artifacts stay out.
+**
+!Dockerfile
+!.dockerignore
+!src/
+!src/backend/
+!src/backend/requirements.runtime.lock
+!src/backend/app/
+!src/backend/app/**
+!src/frontend/
+!src/frontend/package.json
+!src/frontend/package-lock.json
+!src/frontend/index.html
+!src/frontend/tsconfig*.json
+!src/frontend/vite.config.*
+!src/frontend/src/
+!src/frontend/src/**
+!src/frontend/public/
+!src/frontend/public/**
+# Keep bytecode and environment files excluded even inside allowed trees.
+**/__pycache__
+**/*.py[cod]
+**/.env
+**/.env.*

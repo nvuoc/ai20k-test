@@ -1,0 +1,23 @@
+{
+    email {$ACME_EMAIL}
+    admin off
+}
+
+{$DOMAIN} {
+    encode zstd gzip
+    header Strict-Transport-Security "max-age=15552000"
+    header X-Content-Type-Options "nosniff"
+    header Referrer-Policy "same-origin"
+
+    # Protect the page, anonymous bootstrap and all API endpoints during beta.
+    basic_auth {
+        {$BETA_USER} {$BETA_PASSWORD_HASH}
+    }
+    request_body {
+        max_size 65536
+    }
+    reverse_proxy app:8000 {
+        # Browser credentials belong to Caddy, not to the application or providers.
+        header_up -Authorization
+    }
+}

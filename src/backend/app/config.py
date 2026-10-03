@@ -55,6 +55,14 @@ class Settings:
     traffic_enabled: bool = True
     traffic_ttl_seconds: int = 60
     cookie_secure: bool = False
+    max_request_body_bytes: int = 65536
+    inbound_owner_rpm: int = 120
+    inbound_global_rpm: int = 600
+    max_sessions_per_owner: int = 100
+    max_sessions_total: int = 10000
+    max_pending_per_session: int = 20
+    max_pending_total: int = 1000
+    worker_concurrency: int = 4
     allowed_origins: tuple[str, ...] = (
         "http://127.0.0.1:8000", "http://localhost:8000",
         "http://127.0.0.1:5173", "http://localhost:5173",
@@ -125,12 +133,26 @@ class Settings:
             traffic_enabled=os.getenv("TRAFFIC_ENABLED", "true").lower() == "true",
             traffic_ttl_seconds=int(os.getenv("TRAFFIC_TTL_SECONDS", "60")),
             cookie_secure=os.getenv("COOKIE_SECURE", "false").lower() == "true",
+            max_request_body_bytes=int(os.getenv("MAX_REQUEST_BODY_BYTES", "65536")),
+            inbound_owner_rpm=int(os.getenv("INBOUND_OWNER_RPM", "120")),
+            inbound_global_rpm=int(os.getenv("INBOUND_GLOBAL_RPM", "600")),
+            max_sessions_per_owner=int(os.getenv("MAX_SESSIONS_PER_OWNER", "100")),
+            max_sessions_total=int(os.getenv("MAX_SESSIONS_TOTAL", "10000")),
+            max_pending_per_session=int(os.getenv("MAX_PENDING_PER_SESSION", "20")),
+            max_pending_total=int(os.getenv("MAX_PENDING_TOTAL", "1000")),
+            worker_concurrency=int(os.getenv("WORKER_CONCURRENCY", "4")),
             allowed_origins=tuple(x.strip() for x in os.getenv(
                 "ALLOWED_ORIGINS", ",".join(cls.allowed_origins)
             ).split(",") if x.strip()),
         )
         if settings.profile not in {"fixture_demo", "chat_sandbox", "test"}:
             raise ValueError("APP_PROFILE must be fixture_demo, chat_sandbox or test")
+        if any(getattr(settings, name) <= 0 for name in (
+            "max_request_body_bytes", "inbound_owner_rpm", "inbound_global_rpm",
+            "max_sessions_per_owner", "max_sessions_total", "max_pending_per_session",
+            "max_pending_total", "worker_concurrency",
+        )):
+            raise ValueError("Request, session, queue and worker limits must be positive")
         if not 1 <= settings.gemini_rpm <= 15:
             raise ValueError("GEMINI_RPM must be between 1 and 15")
         if settings.max_llm_calls not in {1, 2}:

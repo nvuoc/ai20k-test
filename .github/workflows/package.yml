@@ -1,0 +1,126 @@
+name: Package VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'VPS CPU architecture (uname -m: x86_64 = amd64; aarch64 = arm64)'
+        type: choice
+        default: linux/amd64
+        options:
+          - linux/amd64
+          - linux/arm64
+  push:
+    branches: [main, master]
+    tags: ['v*']
+    paths:
+      - 'src/backend/**'
+      - 'src/frontend/**'
+      - 'deploy/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/package.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'src/backend/**'
+      - 'src/frontend/**'
+      - 'deploy/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/package.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.workflow }}-${{ github.ref }}-${{ inputs.platform || 'linux/amd64' }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select artifact architecture
+        id: target
+        shell: bash
+        run: |
+          case "$PLATFORM" in
+            linux/amd64) echo 'arch=amd64' >> "$GITHUB_OUTPUT" ;;
+            linux/arm64) echo 'arch=arm64' >> "$GITHUB_OUTPUT" ;;
+            *) echo 'Unsupported platform' >&2; exit 1 ;;
+          esac
+
+      - name: Enable ARM emulation
+        if: env.PLATFORM == 'linux/arm64'
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build frontend and backend image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ env.PLATFORM }}
+          load: true
+          push: false
+          tags: parrotgo:local
+          provenance: false
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=parrotgo-${{ steps.target.outputs.arch }}
+          cache-to: type=gha,mode=max,scope=parrotgo-${{ steps.target.outputs.arch }}
+
+      - name: Smoke test image with offline fixtures and persistent data
+        shell: bash
+        run: python3 deploy/smoke_image.py
+
+      - name: Validate HTTPS proxy configuration
+        shell: bash
+        env:
+          DOMAIN: chat.example.com
+          ACME_EMAIL: admin@example.com
+          BETA_USER: ci
+          # Public example hash from Caddy documentation; no deployment credentials.
+          BETA_PASSWORD_HASH: '$2a$14$Zkx19XLiW6VYouLHR5NmfOFU0z2GTNmpkT/5qqR7hx4IjWJPDhjvG'
+        run: |
+          docker run --rm --network none \
+            -e DOMAIN -e ACME_EMAIL -e BETA_USER -e BETA_PASSWORD_HASH \
+            --mount "type=bind,src=$PWD/deploy/Caddyfile,dst=/etc/caddy/Caddyfile,readonly" \
+            caddy:2 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+      - name: Create image and source archives
+        shell: bash
+        run: |
+          package_dir="$RUNNER_TEMP/parrotgo-package"
+          mkdir -p "$package_dir"
+          python3 deploy/package.py
+          cp deploy/parrotgo-vps.tar.gz "$package_dir/"
+          docker image save parrotgo:local | gzip -1 > "$package_dir/parrotgo-image.tar.gz"
+          printf 'commit=%s\nplatform=%s\nrun=%s\nimage=parrotgo:local\n' \
+            "$GITHUB_SHA" "$PLATFORM" "$GITHUB_RUN_ID" > "$package_dir/BUILD_INFO.txt"
+          cd "$package_dir"
+          sha256sum parrotgo-vps.tar.gz parrotgo-image.tar.gz BUILD_INFO.txt > SHA256SUMS
+
+      - name: Upload VPS package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: parrotgo-vps-${{ steps.target.outputs.arch }}-${{ github.sha }}
+          path: ${{ runner.temp }}/parrotgo-package/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

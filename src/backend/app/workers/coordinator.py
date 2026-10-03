@@ -10,30 +10,43 @@ logger = logging.getLogger(__name__)
 
 class Coordinator:
     def __init__(self, store, graph, *, concurrency=4):
+        if type(concurrency) is not int or concurrency < 1:
+            raise ValueError("Worker concurrency must be a positive integer")
         self.store = store
         self.graph = graph
         self.concurrency = asyncio.Semaphore(concurrency)
+        self.max_tasks = concurrency
         self.tasks = {}
         self.wakeup = asyncio.Event()
         self.running = True
+        self._prefer_reconciliation = True
 
     async def run(self):
         while self.running:
-            for session_id in self.store.pending_sessions():
-                if session_id not in self.tasks:
-                    task = asyncio.create_task(self.run_session(session_id))
-                    self.tasks[session_id] = task
-                    task.add_done_callback(lambda _, sid=session_id: self.tasks.pop(sid, None))
-            for session_id in self.store.due_reconciliations():
-                if session_id not in self.tasks:
-                    task = asyncio.create_task(self.run_reconciliation(session_id))
-                    self.tasks[session_id] = task
-                    task.add_done_callback(lambda _, sid=session_id: self.tasks.pop(sid, None))
+            queues = [(self.store.pending_sessions, self.run_session),
+                      (self.store.due_reconciliations, self.run_reconciliation)]
+            if self._prefer_reconciliation:
+                queues.reverse()
+            self._prefer_reconciliation = not self._prefer_reconciliation
+            for pending, process in queues:
+                if len(self.tasks) >= self.max_tasks:
+                    break
+                for session_id in pending():
+                    if len(self.tasks) >= self.max_tasks:
+                        break
+                    if session_id not in self.tasks:
+                        task = asyncio.create_task(process(session_id))
+                        self.tasks[session_id] = task
+                        task.add_done_callback(lambda _, sid=session_id: self._task_done(sid))
             try:
                 await asyncio.wait_for(self.wakeup.wait(), timeout=0.5)
             except TimeoutError:
                 pass
             self.wakeup.clear()
+
+    def _task_done(self, session_id):
+        self.tasks.pop(session_id, None)
+        self.wakeup.set()
 
     async def run_session(self, session_id):
         async with self.concurrency:
@@ -54,6 +67,9 @@ class Coordinator:
                         occurred_at=datetime.fromisoformat(event["created_at"]).timestamp(),
                     )
                     self.store.complete(event, state)
+                    # Yield the slot after one turn so a session cannot retain
+                    # a permit indefinitely while more messages arrive.
+                    return
                 except asyncio.CancelledError:
                     raise
                 except ExtractorError as exc:
