@@ -1,0 +1,23 @@
+{
+  "case_id": "F018",
+  "stage": "before_prompt_fix",
+  "provider": "gemini",
+  "model": "gemini-3.5-flash-lite",
+  "valid": false,
+  "error": "OUTPUT_INVALID",
+  "rejected_provider_output": {
+    "speech_status": "clear",
+    "dialogue_acts": [
+      {
+        "intent": "provide_info",
+        "target": "pickup",
+        "value": "A"
+      },
+      {
+        "intent": "provide_info",
+        "target": "vehicle_type",
+        "value": "xe 16 chỗ"
+      }
+    ]
+  }
+}

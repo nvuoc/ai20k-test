@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-02",
+  "timezone": "Asia/Saigon",
+  "checked_at": "2026-10-02T13:03:08Z",
+  "versions": {
+    "turn_contract": "parrotgo-turn-2",
+    "prompt": "extractor-v2",
+    "booking_slots": "booking-slots-3",
+    "state_schema": 5,
+    "graph": "chat-graph-2",
+    "policy": "mvp-chat-policy-2",
+    "http_api": "chat-api-2",
+    "presentation": "chat-presentation-2",
+    "maps": "map-resolution-1 with scope bindings",
+    "weather": "WeatherRequest / WeatherFact",
+    "model": "gemini-3.5-flash-lite",
+    "dependency_locks": [
+      "src/backend/uv.lock",
+      "src/frontend/package-lock.json"
+    ]
+  },
+  "development": {
+    "offline_tests": {
+      "passed": 409,
+      "failed": 0,
+      "baseline_regressions": 346,
+      "added_v2_cases": 63
+    },
+    "browser_e2e": {
+      "passed": 6,
+      "failed": 0,
+      "artifact": "src/frontend/test-results/.last-run.json",
+      "cleanup_note": "Windows test server closed its listening port but remained alive during Playwright cleanup; only the spawned test server was force-stopped, after which Playwright exited successfully."
+    },
+    "frontend_typecheck_and_build": "passed",
+    "python_ruff": "passed",
+    "openapi_generated_types_check": "passed",
+    "text_main_demo": "passed; offline, isolated databases, inquiry -> promote -> separate consent -> one sandbox booking -> cancellation",
+    "coverage": [
+      "inquiry preserves booking slots/revision/quote; route facts shared",
+      "typed/text promotion; stale scope/revision/TTL/ACK rejected",
+      "mixed booking correction/question; confirmation with correction needs new summary",
+      "weather single point, explicit/ambiguous time, midnight arrival scenarios, units/cache/failures",
+      "address identity/house components, anchor lookup, regional alias source/version",
+      "motorcycle provider profile, catalog gating, adults/children capacity",
+      "persistent quota wait without exhausting fault retries",
+      "checkpoint replay without repeated inference; ledger commit recovery after quote expiry",
+      "text main persistent sessions, idempotent messages, session separation"
+    ]
+  },
+  "live": {
+    "inquiry_weather_report": "src/backend/evaluation/ver2/live-smoke-report.json",
+    "inquiry_weather_cases": 3,
+    "free_text_gemini_calls": 2,
+    "faq_model_calls": 0,
+    "booking_slots_unchanged": true,
+    "sandbox_booking_count": 0,
+    "booking_turn_report": "src/backend/evaluation/ver2/booking-turn-smoke-report.json",
+    "booking_turn_model_calls": 1,
+    "booking_turn_fields": 5,
+    "personal_phone_submitted": false,
+    "effects_dispatched": 0,
+    "address_selection": "Explicit first-candidate selections for adapter smoke, not address ground truth.",
+    "sources": [
+      "https://open-meteo.com/en/docs",
+      "https://maps.vietmap.vn/docs/map-api/route-version/route-v4/"
+    ]
+  },
+  "holdout": {
+    "status": "not_run",
+    "conversation_target": 160,
+    "address_target": 400,
+    "end_to_end_conversation_target": 20
+  },
+  "limitations": [
+    "Development tests and live smoke do not establish holdout language or address precision/recall.",
+    "No reviewed local-alias dataset for a real operating area is bundled; live excludes fixture aliases.",
+    "Electric motorbike defaults disabled until operational tariff/profile/capacity/child policy is configured.",
+    "Fares and bookings are sandbox; no driver dispatch, OTP/payment, scheduled bookings, multiple stops or amendments.",
+    "One runtime/process per business/checkpoint database pair; text and HTTP use separate pairs.",
+    "Open-Meteo free endpoint is for non-commercial use; configured customer key selects the paid endpoint.",
+    "V2 live subset does not claim a complete live create/cancel flow; these paths have offline regression and browser coverage."
+  ]
+}

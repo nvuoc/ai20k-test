@@ -1,0 +1,76 @@
+{
+  "kind": "live",
+  "holdout": false,
+  "checked_at": "2026-10-02T12:50:03.057343+00:00",
+  "turn_version": "parrotgo-turn-2",
+  "model": "gemini-3.5-flash-lite",
+  "cases": [
+    {
+      "input": "Bạn là ai?",
+      "reply": "Mình là trợ lý đặt xe của ParrotGo. Hiện đây là bản thử nghiệm, chưa gọi tài xế thật.",
+      "reason": null,
+      "selections": [],
+      "selection_policy": "explicit first candidate for adapter smoke, not address gold",
+      "booking_unchanged": true,
+      "booking_count": 0
+    },
+    {
+      "input": "Từ Nhà hát Lớn Hà Nội đến Ga Hà Nội bao nhiêu tiền, bao nhiêu km và mất bao lâu?",
+      "reply": "Tuyến Nhà Hát Lớn Hà Nội, Phường Cửa Nam, Thành phố Hà Nội → Ga Ha Noi, Phường Văn Miếu-Quốc Tử Giám, Thành phố Hà Nội. Giá thử nghiệm tham khảo: Ô tô 4 chỗ: 43,000 đồng; Ô tô 7 chỗ: 54,000 đồng. Giá có thời hạn, sẽ kiểm tra lại trước khi đặt.\nTừ Nhà Hát Lớn Hà Nội, Phường Cửa Nam, Thành phố Hà Nội đến Ga Ha Noi, Phường Văn Miếu-Quốc Tử Giám, Thành phố Hà Nội, quãng đường theo tuyến ô tô 4 chỗ khoảng 2.81 km. Nguồn: vietmap:route:v4.\nTừ Nhà Hát Lớn Hà Nội, Phường Cửa Nam, Thành phố Hà Nội đến Ga Ha Noi, Phường Văn Miếu-Quốc Tử Giám, Thành phố Hà Nội bằng ô tô 4 chỗ, thời gian di chuyển ước tính khoảng 5 phút. Thực tế có thể thay đổi theo giao thông. Nguồn: vietmap:route:v4.",
+      "reason": null,
+      "selections": [
+        {
+          "label": "Nhà Hát Lớn Hà Nội, Phường Cửa Nam, Thành phố Hà Nội",
+          "scope_kind": "inquiry"
+        },
+        {
+          "label": "Ga Ha Noi, Phường Văn Miếu-Quốc Tử Giám, Thành phố Hà Nội",
+          "scope_kind": "inquiry"
+        }
+      ],
+      "selection_policy": "explicit first candidate for adapter smoke, not address gold",
+      "booking_unchanged": true,
+      "booking_count": 0
+    },
+    {
+      "input": "Thời tiết ở Nhà hát Lớn Hà Nội bây giờ có mưa không?",
+      "reply": "Tại Nhà Hát Lớn Hà Nội, Phường Cửa Nam, Thành phố Hà Nội khoảng 19:50 ngày 02/10 (nếu xuất phát khoảng hiện tại, chưa có giờ đón thực tế), dự báo: có mây, nhiệt độ khoảng 29.3°C, khả năng mưa 5% trong khoảng giờ dự báo. Dữ liệu theo giờ, không phải đo tại đúng phút lên xe. Nguồn: Weather data by Open-Meteo.com.",
+      "reason": null,
+      "selections": [
+        {
+          "label": "Nhà Hát Lớn Hà Nội, Phường Cửa Nam, Thành phố Hà Nội",
+          "scope_kind": "inquiry"
+        }
+      ],
+      "selection_policy": "explicit first candidate for adapter smoke, not address gold",
+      "booking_unchanged": true,
+      "booking_count": 0
+    }
+  ],
+  "open_meteo": {
+    "status": "available",
+    "request_id": "weather-smoke",
+    "scope_kind": "inquiry",
+    "scope_id": "smoke",
+    "dependency_fingerprint": "weather-smoke",
+    "provider": "Open-Meteo",
+    "source_ref": "https://open-meteo.com/en/docs",
+    "attribution": "Weather data by Open-Meteo.com",
+    "fetched_at": "2026-10-02T12:50:10.397530Z",
+    "valid_until": "2026-10-02T13:05:10.397530Z",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "coverage_start": "2026-10-02T00:00:00Z",
+    "coverage_end": "2026-10-17T23:00:00Z",
+    "sample": {
+      "timestamp": "2026-10-02T13:00:00Z",
+      "weather_code": 2,
+      "temperature_c": 29.3,
+      "precipitation_probability": 5.0,
+      "precipitation_mm": 0.0,
+      "wind_speed_kmh": 13.0
+    },
+    "unavailable_reason": null,
+    "missing_fields": [],
+    "time_basis": "hourly forecast; precipitation describes the preceding hour"
+  }
+}

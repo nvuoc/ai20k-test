@@ -1,0 +1,43 @@
+{
+  "kind": "live-smoke",
+  "model": "gemini-3.5-flash-lite",
+  "maps": "vietmap",
+  "booking_provider": "sandbox",
+  "steps": [
+    {
+      "kind": "messages",
+      "status": "collecting_info",
+      "action": "offer_candidates",
+      "reason": null
+    },
+    {
+      "kind": "actions",
+      "status": "collecting_info",
+      "action": "offer_candidates",
+      "reason": null
+    },
+    {
+      "kind": "actions",
+      "status": "awaiting_confirmation",
+      "action": "confirm_booking",
+      "reason": null
+    },
+    {
+      "kind": "actions",
+      "status": "booked",
+      "action": "inform_success",
+      "reason": null
+    },
+    {
+      "kind": "actions",
+      "status": "cancelled",
+      "action": "inform_success",
+      "reason": null
+    }
+  ],
+  "passed": true,
+  "booking_id": "SBX-4591E80048",
+  "natural_turns": 1,
+  "final_status": "cancelled",
+  "elapsed_seconds": 3.922
+}

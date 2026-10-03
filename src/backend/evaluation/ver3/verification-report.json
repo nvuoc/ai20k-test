@@ -1,0 +1,45 @@
+{
+  "verified_date": "2026-10-03",
+  "timezone": "Asia/Saigon",
+  "kind": "development-integration",
+  "holdout": false,
+  "contracts": {
+    "new_state_schema": 6,
+    "turn": "parrotgo-turn-3",
+    "api": "chat-api-3",
+    "presentation": "chat-presentation-3",
+    "legacy_compatible": true
+  },
+  "backend": {
+    "passed": 546,
+    "failed": 0,
+    "elapsed_seconds": 39.88,
+    "command_from_backend": ".venv/Scripts/python.exe -m pytest -q --tb=short --basetemp .test-tmp/all-v3-final2",
+    "log": "src/backend/.test-tmp/all-v3-final2.log"
+  },
+  "browser": {
+    "distinct_passed": 15,
+    "failed_remaining": 0,
+    "run_notes": "Full suite passed 14 tests; the assistance test was corrected to assert actual price breakdown and passed on rerun. Inquiry and assistance workflows passed again after final backend guards.",
+    "coverage": ["text-only transcript", "location and inquiry confirmation", "text candidate selection", "booking cancellation", "area fixed point", "assistance preview and fee consent", "reload and quote preservation", "desktop", "compact VS Code viewport", "mobile", "iframe scrolling", "ACK retry", "stable retry message IDs"],
+    "actual_vscode_webview_tested": false,
+    "windows_teardown": "Owned Python test servers stopped by exact PID after assertions; no test server retained."
+  },
+  "checks": {
+    "ruff": "passed",
+    "typescript": "passed",
+    "frontend_build": "passed",
+    "generated_openapi_types": "current",
+    "textbot_v3_demo": "passed"
+  },
+  "live_provider_probes": [
+    {"provider": "groq", "model": "openai/gpt-oss-120b", "requests": 1, "elapsed_seconds_approx": 1.66, "validated_turn": "parrotgo-turn-3", "booking_acts": 0, "location_decisions": 0},
+    {"provider": "gemini", "model": "gemini-3.5-flash-lite", "requests": 1, "elapsed_seconds_approx": 1.59, "validated_turn": "parrotgo-turn-3", "booking_acts": 0, "location_decisions": 0}
+  ],
+  "limitations": [
+    "Live provider probes verify transport and schema on a greeting, not broad Vietnamese language quality.",
+    "No live VietMap or driver dispatch calls were part of this verification run; map transport is covered by mocked provider responses.",
+    "Area assistance policy and sample anchors are sandbox data; assistance disabled in default live configuration.",
+    "Independent holdout language and address evaluations remain future release work."
+  ]
+}

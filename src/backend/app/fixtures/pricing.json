@@ -1,0 +1,10 @@
+{
+  "version": "pricing-sandbox-1",
+  "currency": "VND",
+  "rounding": 1000,
+  "ttl_seconds": 120,
+  "tariffs": {
+    "oto_4_cho":{"base_fee":12000,"per_km":11000},
+    "oto_7_cho":{"base_fee":15000,"per_km":14000}
+  }
+}

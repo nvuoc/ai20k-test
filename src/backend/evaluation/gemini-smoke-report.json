@@ -1,0 +1,192 @@
+{
+  "evaluation_version": "booking-nlu-regression-1",
+  "provider": "gemini",
+  "model": "gemini-3.5-flash-lite",
+  "dataset_kind": "development_regression_examples_not_holdout",
+  "metric": "exact_typed_act_match_ignoring_act_order",
+  "limitation": "Offline results verify fixture behavior only. Live exact matches do not measure all semantic equivalents or production language quality.",
+  "requested": 3,
+  "completed": 3,
+  "schema_valid": 3,
+  "exact_act_matches": 1,
+  "cases": [
+    {
+      "case_id": "F067",
+      "valid": true,
+      "exact_act_match": false,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "Nhà hát Lớn Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "Ga Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "đi ngay"
+        },
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        },
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_4_cho"
+        },
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "0901234567"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "Nhà hát Lớn Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "Ga Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "ngay bây giờ"
+        },
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        },
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_4_cho"
+        },
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "0901234567"
+        }
+      ],
+      "model_calls": 1,
+      "latency_seconds": 1.75,
+      "known_alias_act_match": true
+    },
+    {
+      "case_id": "F068",
+      "valid": true,
+      "exact_act_match": false,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "Nhà hát Lớn Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "Trường Sao Mai"
+        },
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "đi ngay"
+        },
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        },
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_4_cho"
+        },
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "0901234567"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "Nhà hát Lớn Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "Trường Sao Mai"
+        },
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "ngay bây giờ"
+        },
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        },
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_4_cho"
+        },
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "0901234567"
+        }
+      ],
+      "model_calls": 1,
+      "latency_seconds": 1.406,
+      "known_alias_act_match": true
+    },
+    {
+      "case_id": "F065",
+      "valid": true,
+      "exact_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "confirm",
+          "target": "pickup",
+          "value": null
+        },
+        {
+          "intent": "change_info",
+          "target": "pickup_time",
+          "value": "4 giờ chiều"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "confirm",
+          "target": "pickup",
+          "value": null
+        },
+        {
+          "intent": "change_info",
+          "target": "pickup_time",
+          "value": "4 giờ chiều"
+        }
+      ],
+      "model_calls": 1,
+      "latency_seconds": 1.141,
+      "known_alias_act_match": true
+    }
+  ],
+  "known_alias_act_matches": 3,
+  "known_aliases": "Only unconditional ASAP phrases; all other values remain exact."
+}

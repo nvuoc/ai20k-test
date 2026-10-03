@@ -1,0 +1,9 @@
+{
+  "version": "sandbox-area-assistance-1",
+  "sandbox": true,
+  "consent_ttl_seconds": 600,
+  "rules": [
+    {"area_id": "fixture_ocean_park_1", "vehicle_types": ["oto_4_cho", "oto_7_cho"], "fee_amount": 20000, "max_extra_distance_m": 2000, "max_wait_minutes": 10},
+    {"area_id": "fixture_lai_xa", "vehicle_types": ["oto_4_cho", "oto_7_cho"], "fee_amount": 15000, "max_extra_distance_m": 1500, "max_wait_minutes": 10}
+  ]
+}

@@ -1,0 +1,200 @@
+{
+  "evaluation_version": "booking-nlu-regression-1",
+  "provider": "gemini",
+  "model": "gemini-3.5-flash-lite",
+  "dataset_kind": "development_regression_examples_not_holdout",
+  "metric": "exact_typed_act_match_ignoring_act_order",
+  "limitation": "Offline results verify fixture behavior only. Live exact matches do not measure all semantic equivalents or production language quality.",
+  "requested": 7,
+  "completed": 7,
+  "schema_valid": 7,
+  "exact_act_matches": 6,
+  "known_alias_act_matches": 6,
+  "known_aliases": "Only unconditional ASAP phrases; all other values remain exact.",
+  "cases": [
+    {
+      "case_id": "F018",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        },
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        },
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 1,
+      "latency_seconds": 1.484
+    },
+    {
+      "case_id": "F024",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 1,
+      "latency_seconds": 1.078
+    },
+    {
+      "case_id": "F025",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "change_info",
+          "target": "pickup_time",
+          "value": "5 giờ chiều"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "change_info",
+          "target": "pickup_time",
+          "value": "5 giờ chiều"
+        }
+      ],
+      "model_calls": 1,
+      "latency_seconds": 1.156
+    },
+    {
+      "case_id": "F031",
+      "valid": true,
+      "exact_act_match": false,
+      "known_alias_act_match": false,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 2,
+            "size": "large"
+          }
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "change_info",
+          "target": "luggage",
+          "value": {
+            "count": 2,
+            "size": "large"
+          }
+        }
+      ],
+      "model_calls": 1,
+      "latency_seconds": 1.109
+    },
+    {
+      "case_id": "F043",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 1,
+      "latency_seconds": 0.985
+    },
+    {
+      "case_id": "F045",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "special_requests",
+          "value": [
+            "child_seat"
+          ]
+        },
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "special_requests",
+          "value": [
+            "child_seat"
+          ]
+        },
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 1,
+      "latency_seconds": 1.406
+    },
+    {
+      "case_id": "F050",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 1,
+      "latency_seconds": 1.203
+    }
+  ]
+}

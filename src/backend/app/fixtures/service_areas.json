@@ -1,0 +1,44 @@
+{
+  "version": "service-areas-sandbox-1",
+  "notice": "Khu vực, điểm đại diện, tọa độ và khả năng xe tiếp cận là dữ liệu mẫu cố định. Không dùng để vận hành, xác minh địa giới hoặc hứa tài xế thật hỗ trợ khách.",
+  "entries": [
+    {
+      "aliases": ["Ocean Park 1", "Vinhomes Ocean Park 1"],
+      "kind": "fixture",
+      "area_id": "fixture_ocean_park_1",
+      "label": "Ocean Park 1, Gia Lâm, Hà Nội (khu vực thử nghiệm)",
+      "source": "fixture:service-areas-sandbox-1",
+      "locality": "Hà Nội",
+      "place_types": ["residential_area"],
+      "representative_points": [{
+        "id": "fixture_ocean_park_1_anchor",
+        "label": "Ocean Park 1, điểm đại diện thử nghiệm, Hà Nội",
+        "lat": 20.998,
+        "lon": 105.943,
+        "source": "fixture:service-areas-sandbox-1",
+        "place_types": ["meeting_point"],
+        "meeting_point": "Điểm đại diện thử nghiệm",
+        "metadata": {"sandbox": true, "access": "verified", "vehicle_profiles": ["car", "motorcycle"], "default_representative": true}
+      }]
+    },
+    {
+      "aliases": ["Thôn Lai Xá", "Lai Xá"],
+      "kind": "fixture",
+      "area_id": "fixture_lai_xa",
+      "label": "Thôn Lai Xá, Hoài Đức, Hà Nội (khu vực thử nghiệm)",
+      "source": "fixture:service-areas-sandbox-1",
+      "locality": "Hà Nội",
+      "place_types": ["village"],
+      "representative_points": [{
+        "id": "fixture_lai_xa_anchor",
+        "label": "Thôn Lai Xá, điểm đại diện thử nghiệm, Hà Nội",
+        "lat": 21.056,
+        "lon": 105.729,
+        "source": "fixture:service-areas-sandbox-1",
+        "place_types": ["meeting_point"],
+        "meeting_point": "Điểm đại diện thử nghiệm",
+        "metadata": {"sandbox": true, "access": "verified", "vehicle_profiles": ["car", "motorcycle"], "default_representative": true}
+      }]
+    }
+  ]
+}

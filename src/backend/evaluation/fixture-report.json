@@ -1,0 +1,1876 @@
+{
+  "evaluation_version": "booking-nlu-regression-1",
+  "provider": "fixture",
+  "model": "offline-fixture",
+  "dataset_kind": "development_regression_examples_not_holdout",
+  "metric": "exact_typed_act_match_ignoring_act_order",
+  "limitation": "Offline results verify fixture behavior only. Live exact matches do not measure all semantic equivalents or production language quality.",
+  "requested": 72,
+  "completed": 72,
+  "schema_valid": 72,
+  "exact_act_matches": 72,
+  "known_alias_act_matches": 72,
+  "known_aliases": "Only unconditional ASAP phrases; all other values remain exact.",
+  "cases": [
+    {
+      "case_id": "F069",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 2,
+            "size": "mixed"
+          }
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 2,
+            "size": "mixed"
+          }
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.031
+    },
+    {
+      "case_id": "F070",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "confirm",
+          "target": "vehicle_type",
+          "value": null
+        },
+        {
+          "intent": "change_info",
+          "target": "pickup",
+          "value": "B"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "confirm",
+          "target": "vehicle_type",
+          "value": null
+        },
+        {
+          "intent": "change_info",
+          "target": "pickup",
+          "value": "B"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F071",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "deny",
+          "target": "payment_method",
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "deny",
+          "target": "payment_method",
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F072",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F067",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "Nhà hát Lớn Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "Ga Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "ngay bây giờ"
+        },
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_4_cho"
+        },
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "0901234567"
+        },
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "Nhà hát Lớn Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "Ga Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "ngay bây giờ"
+        },
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        },
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_4_cho"
+        },
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "0901234567"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F068",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "Nhà hát Lớn Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "Trường Sao Mai"
+        },
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "ngay bây giờ"
+        },
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_4_cho"
+        },
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "0901234567"
+        },
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "Nhà hát Lớn Hà Nội"
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "Trường Sao Mai"
+        },
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "ngay bây giờ"
+        },
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        },
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_4_cho"
+        },
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "0901234567"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F001",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "36 Hoàng Cầu"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "36 Hoàng Cầu"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F002",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "Vincom"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "Vincom"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F003",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "B"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "B"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F004",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        },
+        {
+          "intent": "provide_info",
+          "target": "stops",
+          "value": [
+            "B"
+          ]
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "C"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        },
+        {
+          "intent": "provide_info",
+          "target": "stops",
+          "value": [
+            "B"
+          ]
+        },
+        {
+          "intent": "provide_info",
+          "target": "destination",
+          "value": "C"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F005",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "change_info",
+          "target": "pickup",
+          "value": "B"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "change_info",
+          "target": "pickup",
+          "value": "B"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F006",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.016
+    },
+    {
+      "case_id": "F007",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F008",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F009",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 3
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 3
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F010",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F011",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 3
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 3
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F012",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F013",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_7_cho"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_7_cho"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F014",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_4_cho"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "oto_4_cho"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F015",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "xe_may"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "vehicle_type",
+          "value": "xe_may"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F016",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "change_info",
+          "target": "vehicle_type",
+          "value": "oto_7_cho"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "change_info",
+          "target": "vehicle_type",
+          "value": "oto_7_cho"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F017",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "ask_question",
+          "target": null,
+          "value": "Xe 7 chỗ thì bao nhiêu?"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "ask_question",
+          "target": null,
+          "value": "Xe 7 chỗ thì bao nhiêu?"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F018",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        },
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        },
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.015
+    },
+    {
+      "case_id": "F019",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "ngay bây giờ"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "ngay bây giờ"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F020",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "Ngày mai 8 giờ sáng"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "Ngày mai 8 giờ sáng"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F021",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "15 phút nữa"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "15 phút nữa"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F022",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "4 giờ"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup_time",
+          "value": "4 giờ"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F023",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "change_info",
+          "target": "pickup_time",
+          "value": "4 giờ chiều"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "change_info",
+          "target": "pickup_time",
+          "value": "4 giờ chiều"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F024",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F025",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "change_info",
+          "target": "pickup_time",
+          "value": "5 giờ chiều"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "change_info",
+          "target": "pickup_time",
+          "value": "5 giờ chiều"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F026",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 2,
+            "size": "large"
+          }
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 2,
+            "size": "large"
+          }
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F027",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": null,
+            "size": "large"
+          }
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": null,
+            "size": "large"
+          }
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F028",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 2,
+            "size": "unknown"
+          }
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 2,
+            "size": "unknown"
+          }
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F029",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 0,
+            "size": "none"
+          }
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 0,
+            "size": "none"
+          }
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F030",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 1,
+            "size": "cabin"
+          }
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": 1,
+            "size": "cabin"
+          }
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F031",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "change_info",
+          "target": "luggage",
+          "value": {
+            "count": 2,
+            "size": "large"
+          }
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "change_info",
+          "target": "luggage",
+          "value": {
+            "count": 2,
+            "size": "large"
+          }
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.016
+    },
+    {
+      "case_id": "F032",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "payment_method",
+          "value": "cash"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "payment_method",
+          "value": "cash"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F033",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "ask_question",
+          "target": null,
+          "value": "Nhận tiền mặt không?"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "ask_question",
+          "target": null,
+          "value": "Nhận tiền mặt không?"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F034",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "change_info",
+          "target": "payment_method",
+          "value": "linked_card"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "change_info",
+          "target": "payment_method",
+          "value": "linked_card"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F035",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "profile:primary"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "profile:primary"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F036",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "0900000000"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "contact_phone",
+          "value": "0900000000"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F037",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F038",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "contact_name",
+          "value": "Lan"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "contact_name",
+          "value": "Lan"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F039",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup_note",
+          "value": "Tôi đứng cổng chính áo xanh"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup_note",
+          "value": "Tôi đứng cổng chính áo xanh"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F040",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "stops",
+          "value": []
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "stops",
+          "value": []
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F041",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "change_info",
+          "target": "stops",
+          "value": [
+            "B",
+            "A"
+          ]
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "change_info",
+          "target": "stops",
+          "value": [
+            "B",
+            "A"
+          ]
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F042",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "change_info",
+          "target": "stops",
+          "value": [
+            "A",
+            "B"
+          ]
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "change_info",
+          "target": "stops",
+          "value": [
+            "A",
+            "B"
+          ]
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F043",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F044",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "special_requests",
+          "value": [
+            "wheelchair_access"
+          ]
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "special_requests",
+          "value": [
+            "wheelchair_access"
+          ]
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.016
+    },
+    {
+      "case_id": "F045",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "special_requests",
+          "value": [
+            "child_seat"
+          ]
+        },
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "special_requests",
+          "value": [
+            "child_seat"
+          ]
+        },
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F046",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "special_requests",
+          "value": [
+            "pet"
+          ]
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "special_requests",
+          "value": [
+            "pet"
+          ]
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F047",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "special_requests",
+          "value": []
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "special_requests",
+          "value": []
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F048",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "cancel",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "cancel",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F049",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "ask_question",
+          "target": null,
+          "value": "Hủy có mất phí không?"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "ask_question",
+          "target": null,
+          "value": "Hủy có mất phí không?"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F050",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F051",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "deny",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "deny",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F052",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "confirm",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "confirm",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F053",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "confirm",
+          "target": "pickup",
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "confirm",
+          "target": "pickup",
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F054",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "confirm",
+          "target": "pickup",
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "confirm",
+          "target": "pickup",
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F055",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F056",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F057",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.015
+    },
+    {
+      "case_id": "F058",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "select_candidate",
+          "target": "destination",
+          "value": "d2"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "select_candidate",
+          "target": "destination",
+          "value": "d2"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F059",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "reject_candidate",
+          "target": "destination",
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "reject_candidate",
+          "target": "destination",
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F060",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "no_understanding",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F061",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "request_repeat",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "request_repeat",
+          "target": null,
+          "value": null
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F062",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "chit_chat",
+          "target": null,
+          "value": "Xin chào"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "chit_chat",
+          "target": null,
+          "value": "Xin chào"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F063",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "out_of_scope",
+          "target": null,
+          "value": "Đặt pizza"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "out_of_scope",
+          "target": null,
+          "value": "Đặt pizza"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F064",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        },
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": null,
+            "size": "large"
+          }
+        },
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "provide_info",
+          "target": "pickup",
+          "value": "A"
+        },
+        {
+          "intent": "provide_info",
+          "target": "passengers",
+          "value": 2
+        },
+        {
+          "intent": "provide_info",
+          "target": "luggage",
+          "value": {
+            "count": null,
+            "size": "large"
+          }
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F065",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "confirm",
+          "target": "pickup",
+          "value": null
+        },
+        {
+          "intent": "change_info",
+          "target": "pickup_time",
+          "value": "4 giờ chiều"
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "confirm",
+          "target": "pickup",
+          "value": null
+        },
+        {
+          "intent": "change_info",
+          "target": "pickup_time",
+          "value": "4 giờ chiều"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "F066",
+      "valid": true,
+      "exact_act_match": true,
+      "known_alias_act_match": true,
+      "actual_acts": [
+        {
+          "intent": "ask_question",
+          "target": null,
+          "value": "tổng bao nhiêu?"
+        },
+        {
+          "intent": "confirm",
+          "target": null,
+          "value": null
+        }
+      ],
+      "expected_acts": [
+        {
+          "intent": "confirm",
+          "target": null,
+          "value": null
+        },
+        {
+          "intent": "ask_question",
+          "target": null,
+          "value": "tổng bao nhiêu?"
+        }
+      ],
+      "model_calls": 0,
+      "latency_seconds": 0.0
+    }
+  ]
+}

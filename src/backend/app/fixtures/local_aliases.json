@@ -1,0 +1,8 @@
+{
+  "version": "local-aliases-sandbox-2",
+  "notice": "Chỉ dùng các alias từ locations-sandbox-1 cho demo offline. Live bỏ qua kind=fixture; chưa có bộ alias địa phương được review cho vận hành.",
+  "entries": [
+    {"alias":"Nhà hát Lớn Hà Nội","area":"Hà Nội","canonical_query":"Nhà hát Lớn Hà Nội, 1 Tràng Tiền, Hà Nội","entity_id":"hn_opera","source_ref":"fixture:locations-sandbox-1","source_version":"locations-sandbox-1","kind":"fixture"},
+    {"alias":"VietMap Hồ Chí Minh","area":"Hồ Chí Minh","canonical_query":"VietMap, 3 Trần Nhân Tôn, Hồ Chí Minh","entity_id":"hcm_vietmap","source_ref":"fixture:locations-sandbox-1","source_version":"locations-sandbox-1","kind":"fixture"}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Saigon",
+  "offline_tests": {"passed": 346, "failed": 0},
+  "final_recovery_api_checks": {"passed": 24, "failed": 0},
+  "browser_e2e": {"passed": 4, "failed": 0},
+  "frontend_typecheck_and_build": "passed",
+  "python_ruff": "passed",
+  "openapi_generated_types_check": "passed",
+  "live_booking_smoke": "passed; Gemini + VietMap -> sandbox create -> read -> cancel",
+  "live_gemini_baseline": "40 development cases: 39 valid, 31 exact, 33 unconditional ASAP alias matches",
+  "live_gemini_targeted_after_prompt_fix": "7 valid, 6 exact; remaining difference is provide_info/change_info on luggage completion",
+  "limitations": "Development regression and smoke tests are not an independent held-out language quality benchmark. Booking and fare are sandbox."
+}
