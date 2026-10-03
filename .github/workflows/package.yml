@@ -32,6 +32,7 @@ on:
 
 permissions:
   contents: read
+  packages: write    # <--- BẮT BUỘC: Cho phép workflow đẩy Docker image lên GHCR
 
 concurrency:
   group: package-${{ github.workflow }}-${{ github.ref }}-${{ inputs.platform || 'linux/amd64' }}
@@ -46,7 +47,7 @@ jobs:
       DOCKER_BUILD_RECORD_UPLOAD: 'false'
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
 
@@ -62,15 +63,15 @@ jobs:
 
       - name: Enable ARM emulation
         if: env.PLATFORM == 'linux/arm64'
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        uses: docker/setup-buildx-action@v3
 
       - name: Build frontend and backend image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
@@ -95,7 +96,6 @@ jobs:
           DOMAIN: chat.example.com
           ACME_EMAIL: admin@example.com
           BETA_USER: ci
-          # Public example hash from Caddy documentation; no deployment credentials.
           BETA_PASSWORD_HASH: '$2a$14$Zkx19XLiW6VYouLHR5NmfOFU0z2GTNmpkT/5qqR7hx4IjWJPDhjvG'
         run: |
           docker run --rm --network none \
@@ -103,24 +103,30 @@ jobs:
             --mount "type=bind,src=$PWD/deploy/Caddyfile,dst=/etc/caddy/Caddyfile,readonly" \
             caddy:2 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
-      - name: Create image and source archives
+      # =========================================================================
+      # CÁC BƯỚC ĐẨY LÊN GITHUB CONTAINER REGISTRY (GHCR) OKE
+      # =========================================================================
+      - name: Log in to GitHub Container Registry
+        # Chỉ đẩy lên registry khi commit vào main/tag hoặc chạy manual, không đẩy khi có Pull Request
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image to GHCR
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
-          package_dir="$RUNNER_TEMP/parrotgo-package"
-          mkdir -p "$package_dir"
-          python3 deploy/package.py
-          cp deploy/parrotgo-vps.tar.gz "$package_dir/"
-          docker image save parrotgo:local | gzip -1 > "$package_dir/parrotgo-image.tar.gz"
-          printf 'commit=%s\nplatform=%s\nrun=%s\nimage=parrotgo:local\n' \
-            "$GITHUB_SHA" "$PLATFORM" "$GITHUB_RUN_ID" > "$package_dir/BUILD_INFO.txt"
-          cd "$package_dir"
-          sha256sum parrotgo-vps.tar.gz parrotgo-image.tar.gz BUILD_INFO.txt > SHA256SUMS
+          # GHCR bắt buộc tên repository phải viết thường hoàn toàn (lowercase)
+          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_NAME="ghcr.io/$REPO_LC"
 
-      - name: Upload VPS package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: parrotgo-vps-${{ steps.target.outputs.arch }}-${{ github.sha }}
-          path: ${{ runner.temp }}/parrotgo-package/*
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
+          # Gắn tag commit SHA và tag latest
+          docker tag parrotgo:local "$IMAGE_NAME:${{ github.sha }}"
+          docker tag parrotgo:local "$IMAGE_NAME:latest"
+
+          # Push cả 2 tag lên GHCR
+          docker push "$IMAGE_NAME:${{ github.sha }}"
+          docker push "$IMAGE_NAME:latest"
