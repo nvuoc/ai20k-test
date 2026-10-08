@@ -33,7 +33,8 @@ async def run(live: bool, output: Path):
             "kind": "live" if live else "fixture",
             "holdout": False,
             "checked_at": datetime.now(UTC).isoformat(),
-            "turn_version": "parrotgo-turn-2",
+            "turn_version": "parrotgo-turn-3",
+            "architecture_version": "architecture-fixed-1",
             "model": settings.model if live else "fixture",
             "cases": [],
         }
@@ -44,7 +45,7 @@ async def run(live: bool, output: Path):
                 "Thời tiết ở Nhà hát Lớn Hà Nội bây giờ có mưa không?",
             ]
             for index, text in enumerate(texts):
-                reply = await bot.ask(text, session_id=f"smoke-{index}")
+                reply = await bot.ask(text, session_id=f"smoke-{index}", customer_phone="0901234567", customer_name="An")
                 sid = bot.store.find_session("local-text", f"smoke-{index}")
                 state = bot.store.snapshot(sid)["state"]
                 selections = []
@@ -56,7 +57,7 @@ async def run(live: bool, output: Path):
                         break
                     candidate = response["candidates"][0]
                     selections.append(
-                        {"label": candidate["label"], "scope_kind": candidate["scope_kind"]}
+                        {"label": candidate["label"], "scope_kind": candidate.get("scope_kind", "booking")}
                     )
                     action = ActionInput(
                         client_action_id=f"smoke-select-{index}-{selection_index}",
@@ -86,7 +87,7 @@ async def run(live: bool, output: Path):
                         "selections": selections,
                         "selection_policy": "explicit first candidate for adapter smoke, not address gold",
                         "booking_unchanged": all(
-                            s["value"] is None for s in state["booking_state"].values()
+                            s["value"] is None for name, s in state["booking_state"].items() if name not in {"contact_phone", "contact_name"}
                         ),
                         "booking_count": bot.engine.booking.booking_count(),
                     }

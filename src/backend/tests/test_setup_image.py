@@ -61,7 +61,9 @@ esac
     docker.chmod(0o755)
     calls = tmp_path / "docker-calls.txt"
 
-    def run(*arguments, **mock_env):
+    def run(*arguments, env_extra="", **mock_env):
+        if env_extra:
+            (deploy / ".env").write_text(dummy_env + env_extra, encoding="utf-8")
         env = {
             key: value
             for key, value in os.environ.items()
@@ -82,10 +84,12 @@ esac
             timeout=30,
             check=False,
         )
-        assert (deploy / ".env").read_text(encoding="utf-8") == dummy_env
+        if not env_extra:
+            assert (deploy / ".env").read_text(encoding="utf-8") == dummy_env
         commands = calls.read_text(encoding="utf-8").splitlines() if calls.exists() else []
         return result, commands
 
+    run.env_file = deploy / ".env"
     return run
 
 
@@ -129,3 +133,44 @@ def test_image_flag_requires_start_without_docker_calls(setup_runner):
     assert result.returncode == 2
     assert "requires --start" in result.stderr
     assert calls == []
+
+
+def test_registry_image_uses_configured_tag(setup_runner):
+    result, calls = setup_runner(
+        "--start", "--image", env_extra="PARROTGO_IMAGE=ghcr.io/example/booking:commit-amd64\n"
+    )
+    assert result.returncode == 0, result.stderr
+    assert any("image inspect" in call and "ghcr.io/example/booking:commit-amd64" in call
+               for call in calls)
+
+
+def test_voice_requires_credentials_before_start(setup_runner):
+    result, calls = setup_runner("--start", env_extra="VOICE_ENABLED=true\n")
+    assert result.returncode == 1
+    assert "LIVEKIT_API_KEY" in result.stderr and "AZURE_SPEECH_KEY" in result.stderr
+    assert not any(" up " in call for call in calls)
+
+
+def test_voice_profile_generates_private_bridge_secret(setup_runner):
+    extra = (
+        "VOICE_ENABLED=true\nLIVEKIT_URL=wss://test.livekit.cloud\n"
+        "LIVEKIT_API_KEY=dummy-key\nLIVEKIT_API_SECRET=dummy-secret\n"
+        "AZURE_SPEECH_KEY=dummy-speech-key\nAZURE_SPEECH_REGION=southeastasia\n"
+        "VOICE_AGENT_SECRET=\n"
+    )
+    result, calls = setup_runner("--start", "--image", env_extra=extra)
+    assert result.returncode == 0, result.stderr
+    startup = next(call for call in calls if " up " in call)
+    assert "--profile voice" in startup and "--no-build" in startup
+    content = setup_runner.env_file.read_text(encoding="utf-8")
+    secret = next(line.split("=", 1)[1].strip("'") for line in content.splitlines()
+                  if line.startswith("VOICE_AGENT_SECRET="))
+    assert len(secret) == 96
+    assert secret not in result.stdout + result.stderr + "\n".join(calls)
+
+
+def test_text_mode_stops_previously_enabled_voice_worker(setup_runner):
+    result, calls = setup_runner("--start", env_extra="VOICE_ENABLED=false\n")
+    assert result.returncode == 0, result.stderr
+    assert any("stop voice-agent" in call for call in calls)
+    assert "--profile voice" not in next(call for call in calls if " up " in call)

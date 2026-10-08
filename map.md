@@ -1,3 +1,5 @@
+> Tài liệu V1–V3 lịch sử. Kiến trúc đang thực thi được chốt tại [architecture_fixed.md](architecture_fixed.md), đối chiếu triển khai tại [ARCHITECTURE_IMPLEMENTATION.md](ARCHITECTURE_IMPLEMENTATION.md).
+
 # Bản đồ, địa điểm và tuyến ParrotGo V2
 
 Cập nhật: 02/10/2026. Contract adapter đang thực thi là **map-resolution-1** trong [contracts/maps.py](src/backend/app/contracts/maps.py), với status resolved/ambiguous/not_found/unavailable và các field place/candidates/binding. Versions tại [MVP_PLAN.md](MVP_PLAN.md#contracts), state/consent tại [langgraph.md](langgraph.md), extractor tại [llmextractor.md](llmextractor.md), phản hồi tại [llmplanner.md](llmplanner.md).

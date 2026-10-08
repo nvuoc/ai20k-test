@@ -1,8 +1,9 @@
 """Public HTTP contracts, independent of GraphState and provider payloads."""
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+from app.contracts.booking import StopoverSlot, normalize_phone
 from app.contracts.registry import BookingStatus
 
 Key = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)]
@@ -15,6 +16,10 @@ class InputModel(BaseModel):
 
 class SessionInput(InputModel):
     client_session_key: Key
+    customer_phone: str
+    customer_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)]
+
+    _phone = field_validator("customer_phone")(normalize_phone)
 
 
 class MessageInput(InputModel):
@@ -47,6 +52,11 @@ class CancelDraft(InputModel):
     draft_id: Key
 
 
+class ConfirmCancel(InputModel):
+    type: Literal["confirm_cancel"]
+    prompt_id: Key
+
+
 class UseInquiryRoute(InputModel):
     type: Literal["use_inquiry_route"]
     inquiry_id: Key
@@ -75,7 +85,7 @@ class DismissInquiry(InputModel):
 class ActionInput(InputModel):
     client_action_id: Key
     action: Annotated[
-        SelectCandidate | ConfirmBooking | CancelBooking | CancelDraft | UseInquiryRoute |
+        SelectCandidate | ConfirmBooking | CancelBooking | CancelDraft | ConfirmCancel | UseInquiryRoute |
         ChooseInquiryVehicle | ResumeBooking | DismissInquiry,
         Field(discriminator="type"),
     ]
@@ -127,7 +137,7 @@ class PublicLuggage(PublicModel):
     size: Literal["none", "cabin", "large", "mixed", "unknown"]
 
 
-class TripSummary(PublicModel):
+class LegacyTripSummary(PublicModel):
     pickup: str
     destination: str
     pickup_time: str
@@ -151,6 +161,34 @@ class TripSummary(PublicModel):
     base_fare: int | None = Field(default=None, ge=0)
     assistance_fee: int | None = Field(default=None, ge=0)
     provisional: bool = False
+
+
+class Tariff(PublicModel):
+    per_km: float = Field(ge=0)
+    currency: Literal["VND"]
+    vehicle_type: Literal["xe_may", "oto_4_cho", "oto_7_cho"]
+    source: str
+    final_amount_basis: Literal["meter"]
+
+
+class TripSummary(PublicModel):
+    pickup: str
+    destination: str
+    pickup_time: str
+    passengers: int | None = Field(default=None, ge=1)
+    vehicle_type: Literal["xe_may", "oto_4_cho", "oto_7_cho"]
+    vehicle_label: str
+    customer_phone: str
+    customer_name: str
+    pickup_note: str | None
+    general_note: str | None
+    stopovers: list[StopoverSlot]
+    tariff: Tariff
+    distance_km: float | None
+    duration_minutes: float | None
+    booking_revision: int = Field(ge=0)
+    snapshot_fingerprint: str
+    prompt_id: str
 
 
 class PublicPresentation(PublicModel):
@@ -187,7 +225,7 @@ class AssistantResponse(PublicModel):
     action: str
     focus: str | None
     candidates: list[PublicCandidate]
-    summary: TripSummary | None
+    summary: TripSummary | LegacyTripSummary | None
     presentation: PublicPresentation
     booking_status: BookingStatus
     reason: str | None
@@ -258,6 +296,9 @@ class ChatSnapshot(PublicModel):
     blocked_count: int = Field(default=0, ge=0)
     waiting_for_quota: bool = False
     retry_at: float | None = None
+    architecture_version: str | None = None
+    customer_name: str | None = None
+    customer_phone: str | None = None
 
 
 class PublicCapabilities(PublicModel):
@@ -268,15 +309,17 @@ class PublicCapabilities(PublicModel):
     address_auto_accept_v2: bool = True
     local_address_v2: bool = True
     electric_motorbike: bool = False
+    motorbike: bool = True
     weather: bool = False
     location_confirmation: bool = False
     area_estimate: bool = False
     area_assistance: bool = False
     text_only_chat: bool = True
+    voice_booking: bool = False
 
 
 class PublicVehicle(PublicModel):
-    code: Literal["oto_4_cho", "oto_7_cho", "xe_may_dien"]
+    code: Literal["xe_may", "oto_4_cho", "oto_7_cho", "xe_may_dien"]
     label: str
     max_passengers: int = Field(ge=1)
 

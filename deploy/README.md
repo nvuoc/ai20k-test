@@ -2,7 +2,9 @@
 
 Nếu muốn GitHub build image trước để VPS chỉ nạp và chạy, xem [đóng gói bằng GitHub Actions](GITHUB_ACTIONS.md).
 
-Gói này chạy một process ứng dụng và Caddy qua Docker Compose. Caddy phục vụ HTTPS, yêu cầu tài khoản beta cho cả trang và API; cổng 8000 chỉ nằm trong mạng Docker. Groq/Gemini/VietMap có thể dùng API thật, còn việc tạo/hủy đơn và giá vẫn là sandbox.
+Hướng dẫn triển khai voice agent, dùng GHCR và thay API key: [VOICE_VPS.md](VOICE_VPS.md).
+
+Gói này chạy một process ứng dụng, LiveKit voice agent và Caddy qua Docker Compose. Caddy phục vụ HTTPS, yêu cầu tài khoản beta cho cả trang và API; cổng 8000 chỉ nằm trong mạng Docker. Groq/Gemini/VietMap có thể dùng API thật, còn việc tạo/hủy đơn và giá vẫn là sandbox.
 
 Đã chuẩn bị cấu hình và script; chưa triển khai vào VPS hoặc kiểm chứng API bằng khóa của bạn.
 
@@ -84,9 +86,9 @@ Sửa các giá trị này trực tiếp trong editor trên VPS:
 
 Các dấu `$` trong bcrypt được giữ nguyên nhờ nháy đơn, theo [quy tắc `.env` của Compose](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/#env-file-syntax). Không chạy `source deploy/.env`, không đưa khóa vào chat hoặc ảnh chụp màn hình, không chạy `docker compose config` để in toàn bộ cấu hình; dùng `config --quiet`.
 
-Preset mặc định là `APP_PROFILE=chat_sandbox`, Groq GPT-OSS 120B chính và Gemini Flash Lite dự phòng. `AREA_ASSISTANCE_ENABLED=false` giữ dịch vụ tìm địa chỉ bên trong địa danh ở trạng thái tắt; muốn bật cần dữ liệu địa danh và chính sách đã duyệt. `WEATHER_PROVIDER=disabled` trong preset này; cần cấu hình nhà cung cấp thời tiết phù hợp trước khi bật. Các mức quota và giới hạn nhận tin trong `.env.example` là trần cục bộ, cần phù hợp tài khoản và quy mô beta.
+Preset mặc định là `APP_PROFILE=chat_sandbox`, Groq GPT-OSS 120B chính và Gemini Flash Lite dự phòng. Lõi theo architecture_fixed.md luôn xác nhận slot, chỉ báo giá/km và không áp dụng gói phí hỗ trợ V3. Cấu hình KB và default Mega POI có nguồn bằng KNOWLEDGE_BASE_PATH/MEGA_POI_PATH. `WEATHER_PROVIDER=disabled` trong preset này; cần cấu hình nhà cung cấp thời tiết phù hợp trước khi bật. Docker mặc định dùng `ADMISSION_LIMITS_ENABLED=false`: không giới hạn tốc độ nhận tin, số phiên và số tin chờ. Đặt `ADMISSION_LIMITS_ENABLED=true` trong `deploy/.env` để áp dụng các trần `INBOUND_*`, `MAX_SESSIONS_*`, `MAX_PENDING_*`. Quota Groq/Gemini vẫn cần phù hợp tài khoản API.
 
-Có thể thử khởi động trước bằng `APP_PROFILE=fixture_demo`, không cần ba khóa API. Đây là dữ liệu mẫu, không kiểm tra được tài khoản model hay VietMap. Khi chuyển sang live APIs, sửa lại `APP_PROFILE=chat_sandbox` và điền khóa riêng.
+Có thể thử khởi động trước bằng `APP_PROFILE=fixture_demo` và `VOICE_ENABLED=false`, không cần API key. Đây là dữ liệu mẫu, không kiểm tra được tài khoản model hay VietMap. Khi chuyển sang live APIs, sửa lại `APP_PROFILE=chat_sandbox`; để bật voice, đặt `VOICE_ENABLED=true` và điền khóa riêng theo [VOICE_VPS.md](VOICE_VPS.md).
 
 ## 3. Khởi động và kiểm tra
 
@@ -98,7 +100,7 @@ sudo bash deploy/setup.sh --start
 Script kiểm tra cấu hình, build và chờ healthcheck. Sau đó tạo hàm tiện dụng cho terminal hiện tại:
 
 ```bash
-dc() { sudo docker compose --project-name parrotgo --env-file deploy/.env -f deploy/compose.yaml "$@"; }
+dc() { sudo docker compose --project-name parrotgo --env-file deploy/.env -f deploy/compose.yaml --profile voice "$@"; }
 dc ps
 curl -I https://chat.tenmiencuaban.vn/
 curl --user beta --fail https://chat.tenmiencuaban.vn/api/ready
@@ -161,7 +163,7 @@ Tại thư mục `/srv/parrotgo`, bảo đảm `app` đã dừng và chọn đú
 cd /srv/parrotgo
 sudo install -m 0600 /duong-dan/backup-rieng/parrotgo-THOI_DIEM-PID.env deploy/.env
 sudo nano deploy/.env
-dc() { sudo docker compose --project-name parrotgo --env-file deploy/.env -f deploy/compose.yaml "$@"; }
+dc() { sudo docker compose --project-name parrotgo --env-file deploy/.env -f deploy/compose.yaml --profile voice "$@"; }
 dc stop app
 sudo docker volume inspect parrotgo_app_data --format '{{.Name}}'
 ```

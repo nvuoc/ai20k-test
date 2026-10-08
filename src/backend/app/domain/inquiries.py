@@ -1,4 +1,4 @@
-"""Scoped, read-only route inquiries and answers rendered from provider facts."""
+"""Scoped, read-only map inquiries and answers rendered from provider facts."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from app.domain.engine import candidate_ref, fingerprint, normalized
 
 ZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 ROUTE_QUESTIONS = {"fare_estimate", "route_distance", "travel_duration", "travel_duration_explanation", "weather_forecast"}
+MAP_QUESTIONS = ROUTE_QUESTIONS | {"place_location"}
 
 
 def fact_expiry(value):
@@ -233,7 +234,10 @@ class InquiryService:
             )
             if place:
                 self.update(item, field, place["label"])
-                item["locations"][field] = {"status": "valid", "place": deepcopy(place), "confirmed": True}
+                item["locations"][field] = {
+                    "status": "valid", "place": deepcopy(place), "confirmed": True,
+                    "expires_at": batch["expires_at"],
+                }
                 return
         raise ValueError("STALE_INQUIRY_CANDIDATE")
 
@@ -241,6 +245,8 @@ class InquiryService:
         if state["booking_status"] in {
             "booked",
             "cancelled",
+            "canceled",
+            "operator_required",
             "booking_unknown",
             "cancel_unknown",
             "cancel_failed",
@@ -311,7 +317,9 @@ class InquiryService:
                 "origin": slots.get("pickup"),
                 "destination": slots.get("destination"),
                 "vehicle": question.vehicle_ref or slots.get("vehicle_type"),
-                "departure_time": question.departure_time_ref or slots.get("pickup_time"),
+                "departure_time": question.departure_time_ref
+                or ((committed or {}).get("pickup_schedule") or state["resolution"].get("pickup_time") or {}).get("pickup_at")
+                or slots.get("pickup_time"),
                 "locations": locations,
                 "candidate_sets": {},
                 "routes": {},
@@ -416,16 +424,44 @@ class InquiryService:
             "revision": item["revision"],
         }
 
-    async def _resolve(self, state, item, fields):
+    def _location_scope(self, state, question):
+        field = "destination" if question.destination and not question.origin else "origin"
+        if question.route_scope == "current_booking":
+            field = "destination" if re.search(r"\b(?:diem|noi) den\b", normalized(question.raw_text)) else "origin"
+            booking = self._scope(state, question)
+            query = booking.get(field)
+            item = self._scope(state, question.model_copy(update={
+                "route_scope": "explicit_pair", "origin": query if field == "origin" else None,
+                "destination": query if field == "destination" else None,
+            }))
+            location = booking["locations"].get(field)
+            if location and location.get("status") == "valid":
+                item["locations"][field] = deepcopy(location)
+            return item, field
+        if question.route_scope == "unresolved" and not question.origin and not question.destination:
+            item = self.active(state)
+            if not item or item["expires_at"] <= self.engine.clock() or bool(item["origin"]) == bool(item["destination"]):
+                return self._new(state), "origin"
+        else:
+            item = self._scope(state, question)
+        if not item.get("origin") and item.get("destination"):
+            field = "destination"
+        return item, field
+
+    async def _resolve(self, state, item, fields, *, informational=False):
         missing = [field for field in fields if not item.get(field)]
         if missing:
-            self._prompt(state, item, missing[0])
+            self._prompt(state, item, missing[0], "place_location" if informational else "inquiry_endpoint")
             item["status"] = "awaiting_endpoint"
+            if informational:
+                return "Bạn muốn hỏi vị trí địa điểm hoặc địa danh nào? Bạn cho mình tên và tỉnh/thành nếu biết nhé."
             return "Bạn muốn tính từ đâu?" if missing[0] == "origin" else "Bạn muốn tính đến đâu?"
 
         async def lookup(field):
             cached = item["locations"].get(field)
-            if cached and cached.get("status") == "valid":
+            if cached and (cached.get("status") == "valid" or informational and cached.get("area")) and (
+                not informational or cached.get("expires_at", item["expires_at"]) > self.engine.clock()
+            ):
                 return field, cached
             dependency = fingerprint([item["inquiry_id"], item["revision"], field, item[field]])
             binding = {
@@ -449,11 +485,14 @@ class InquiryService:
                         "status": "unavailable",
                         "message": "Dữ liệu địa điểm không đúng yêu cầu hiện tại. Bạn hỏi lại giúp mình nhé.",
                     }
+                expires_at = fact_expiry(result["expires_at"])
+                if informational and (expires_at <= self.engine.clock() or not fact_expiry(result["resolved_at"]) or fact_expiry(result["resolved_at"]) > self.engine.clock() + 5):
+                    return field, {"status": "unavailable", "message": "Dữ liệu địa điểm đã hết hạn hoặc chưa hợp lệ. Bạn thử hỏi lại giúp mình nhé."}
                 state["read_requests"][binding["request_id"]] = {**binding, "status": "completed"}
                 state["read_facts"][binding["request_id"]] = {
                     "value": deepcopy(result),
                     "valid_until": datetime.fromisoformat(result["expires_at"]).timestamp(),
-                    "source": (result.get("place") or {}).get("source"),
+                    "source": (result.get("place") or result.get("area") or {}).get("source"),
                 }
                 status = (
                     "valid"
@@ -468,6 +507,7 @@ class InquiryService:
                     "message": result.get("clarification") or result.get("message"),
                     "reason_codes": result.get("reason_codes", []),
                     "area": result.get("area"),
+                    "expires_at": expires_at,
                 }
             except Exception:
                 return field, {"status": "unavailable"}
@@ -476,8 +516,10 @@ class InquiryService:
             item["locations"][field] = location
         for field in fields:
             location = item["locations"][field]
+            if informational and location.get("area"):
+                continue
             if location["status"] == "valid":
-                if state["control"].get("schema_version", 4) >= 6 and item.get("scope_kind", "inquiry") == "inquiry" and not location.get("confirmed"):
+                if not informational and state["control"].get("schema_version", 4) >= 6 and item.get("scope_kind", "inquiry") == "inquiry" and not location.get("confirmed"):
                     return self._propose_location(state, item, field, location["place"])
                 continue
             if state["control"].get("schema_version", 4) >= 6 and location.get("area"):
@@ -488,24 +530,29 @@ class InquiryService:
                 if place:
                     location["area_preview"] = True
                     return self._propose_location(state, item, field, place, area_preview=True)
-            self._prompt(state, item, field)
+            self._prompt(state, item, field, "place_location" if informational else "inquiry_endpoint")
             item["status"] = "awaiting_candidate"
             # Relation candidates are anchors, not operational points to select.
             if location.get("candidates") and "RELATION_UNRESOLVED" not in location.get(
                 "reason_codes", []
             ):
                 old = item["candidate_sets"].get(field)
-                item["candidate_sets"][field] = old or {
+                item["candidate_sets"][field] = old if old and old["expires_at"] > self.engine.clock() else {
                     "candidate_set_id": "set_"
                     + fingerprint([item["inquiry_id"], item["revision"], field])[:24],
                     "revision": item["revision"],
-                    "expires_at": min(item["expires_at"], self.engine.clock() + 300),
+                    "expires_at": min(item["expires_at"], location.get("expires_at", self.engine.clock() + 300), self.engine.clock() + 300),
                     "places": location["candidates"][:3],
                     "presented_response_id": None,
                 }
-                return "Có nhiều địa điểm phù hợp. Bạn chọn địa điểm cho tuyến hỏi thử nhé."
+                return (
+                    "Có nhiều địa điểm phù hợp. Bạn muốn hỏi vị trí địa điểm nào? Chọn số hoặc tên trong danh sách nhé."
+                    if informational else "Có nhiều địa điểm phù hợp. Bạn chọn địa điểm cho tuyến hỏi thử nhé."
+                )
             return location.get("message") or (
-                "Dịch vụ bản đồ chưa trả được dữ liệu cho tuyến hỏi thử. Bạn có thể thử lại sau."
+                "Dịch vụ bản đồ chưa trả được dữ liệu địa điểm. Bạn có thể thử lại sau."
+                if informational and location["status"] == "unavailable"
+                else "Dịch vụ bản đồ chưa trả được dữ liệu cho tuyến hỏi thử. Bạn có thể thử lại sau."
                 if location["status"] == "unavailable"
                 else f"Mình chưa xác định được {item[field]}. Bạn bổ sung địa chỉ hoặc khu vực nhé."
             )
@@ -518,6 +565,8 @@ class InquiryService:
         state["dialogue"]["pending_prompt"].update(proposal_id=proposal["proposal_id"], proposed_label=place["label"])
         item["status"] = "awaiting_location_confirmation"
         if area_preview:
+            if "booking_slots" in state:
+                return f"{item[field]} là khu vực rộng. Bạn có muốn tính thử đến điểm đại diện {place['label']} không? Điểm này chỉ dùng để ước tính lộ trình. Khi đặt xe, mình sẽ xác nhận địa chỉ hoặc điểm mặc định đã cấu hình."
             return f"{item[field]} là khu vực rộng. Bạn có muốn tính thử đến điểm đại diện {place['label']} không? Điểm này chỉ dùng ước tính; khi đặt xe vẫn cần chốt nơi đón/đến và dịch vụ hỗ trợ riêng. Trả lời ‘đúng’ hoặc cung cấp địa chỉ cụ thể."
         return f"Mình tìm được {place['label']} cho {'nơi đi' if field == 'origin' else 'nơi đến'} của tuyến hỏi thử. Bạn có muốn dùng địa điểm này để tính tuyến không? Trả lời ‘đúng’ hoặc cung cấp địa chỉ khác."
 
@@ -687,6 +736,9 @@ class InquiryService:
                     text += " Bạn muốn đón khi nào?"
                 answers.append(text)
             elif kind == "price_objection":
+                if hasattr(self.engine, "kb"):
+                    answers.append(self.engine.kb.price_text(question.vehicle_ref))
+                    continue
                 item = (
                     self._scope(state, question)
                     if question.route_scope == "current_booking"
@@ -733,17 +785,22 @@ class InquiryService:
                     answers.append(
                         f"Mình hiểu bạn đang cân nhắc chi phí. Đây là giá thử nghiệm, tính theo {detail}. Bạn có thể hỏi giá loại xe khác để so sánh."
                     )
-            elif kind in ROUTE_QUESTIONS:
-                item = self._explanation_scope(state, question) if kind == "travel_duration_explanation" else self._scope(state, question)
+            elif kind in MAP_QUESTIONS:
+                if kind == "place_location":
+                    item, location_field = self._location_scope(state, question)
+                else:
+                    item = self._explanation_scope(state, question) if kind == "travel_duration_explanation" else self._scope(state, question)
                 if not item:
                     answers.append("Bạn muốn mình giải thích thời gian di chuyển của tuyến nào, thời gian xe đến đón hay thời gian chờ phản hồi?")
                     continue
                 if item.get("scope_kind") != "booking":
                     item["questions"] = [
-                        q.model_dump() for q in questions if q.type in ROUTE_QUESTIONS
+                        q.model_dump() for q in questions if q.type in MAP_QUESTIONS
                     ]
                 fields = (
-                    ("origin",)
+                    (location_field,)
+                    if kind == "place_location"
+                    else ("origin",)
                     if kind == "weather_forecast"
                     and question.weather_target in {"pickup", "explicit_location"}
                     else ("destination",)
@@ -752,10 +809,24 @@ class InquiryService:
                     and not arrival_scenario(question)
                     else ("origin", "destination")
                 )
-                message = await self._resolve(state, item, fields)
+                message = await self._resolve(state, item, fields, informational=kind == "place_location")
                 if message:
                     if message not in answers:
                         answers.append(message)
+                    continue
+                if kind == "place_location":
+                    location = item["locations"][location_field]
+                    fact = location.get("area") or location["place"]
+                    text = f"Vị trí: {fact['label']}."
+                    if location.get("area"):
+                        if fact.get("locality") and normalized(fact["locality"]) not in normalized(fact["label"]):
+                            text += f" Khu vực: {fact['locality']}."
+                        text += " Đây là khu vực rộng."
+                    if fact["source"].startswith("fixture:"):
+                        text += " Đây là dữ liệu địa điểm thử nghiệm."
+                    text += f" Nguồn: {fact['source']}."
+                    item["status"] = "answered"
+                    answers.append(text)
                     continue
                 if (
                     fields == ("origin", "destination")
@@ -823,9 +894,12 @@ class InquiryService:
                         quote = await self._quote(item, code, option) if option else None
                         if quote:
                             prices.append(
-                                f"{self.engine.vehicle_catalog[code]['label']}: {quote['amount']:,.0f} đồng"
+                                f"{self.engine.vehicle_catalog[code]['label']}: {quote['per_km']:,.0f} đồng/km"
+                                if "per_km" in quote else f"{self.engine.vehicle_catalog[code]['label']}: {quote['amount']:,.0f} đồng"
                             )
                     answers.append(
+                        f"Tuyến {a} → {b}. Đơn giá: {'; '.join(prices)}. Tiền cuối cùng theo đồng hồ và quãng đường thực tế."
+                        if prices and hasattr(self.engine, "kb") else
                         f"Tuyến {a} → {b}. Giá thử nghiệm tham khảo: {'; '.join(prices)}. Giá có thời hạn, sẽ kiểm tra lại trước khi đặt."
                         if prices
                         else "Chưa có giá có nguồn cho tuyến này."
@@ -834,7 +908,7 @@ class InquiryService:
                 answers.append("Mình sẵn sàng giúp bạn xem tuyến, giá hoặc tiếp tục đặt xe.")
             else:
                 answers.append(
-                    f"Mình là trợ lý đặt xe của {self.engine.brand_name}. Bản thử nghiệm hỗ trợ xem tuyến, giá, thời tiết và tạo/hủy đơn đi ngay, một chiều."
+                    f"Mình là trợ lý đặt xe của {self.engine.brand_name}. Bản thử nghiệm hỗ trợ xem tuyến, giá, thời tiết và tạo/hủy đơn đi ngay hoặc đặt trước, một chiều."
                 )
         for name in ("read_requests", "read_facts"):
             while len(state[name]) > 64:
@@ -961,6 +1035,8 @@ class InquiryService:
                 response["presentation"].update(prompt_id=proposal["proposal_id"], valid_until=proposal["expires_at"])
             batch = item["candidate_sets"].get(field)
             if batch:
+                if getattr(self.engine, "voice_mode", False):
+                    batch["places"] = batch["places"][:2]
                 candidates = [
                     {
                         "candidate_id": candidate_ref(batch["candidate_set_id"], place["id"]),
@@ -1001,17 +1077,25 @@ class InquiryService:
                 for f in ("origin", "destination")
             )
             and state["booking_status"]
-            not in {"booked", "cancelled", "booking_unknown", "cancel_unknown", "cancel_failed"}
+            not in {"booked", "cancelled", "canceled", "operator_required", "booking_unknown", "cancel_unknown", "cancel_failed"}
             and not any(location.get("area_preview") for location in item["locations"].values())
         )
         response["inquiry"]["booking_revision"] = state["control"]["booking_revision"]
         if response["inquiry"]["can_use_route"]:
             response["text"] += "\nBạn có thể nhắn ‘dùng tuyến vừa hỏi để đặt’, ‘tuyến vừa hỏi đi xe 7 chỗ giá bao nhiêu?’ hoặc ‘tiếp tục chuyến đang đặt’."
         if any(location.get("area_preview") for location in item["locations"].values()) and item.get("route_fingerprint"):
-            response["text"] += "\nĐây là ước tính đến điểm đại diện có nguồn, chưa gồm phí hỗ trợ và chưa chốt điểm trả bên trong khu vực."
+            response["text"] += ("\nĐây là ước tính đến điểm đại diện có nguồn; tiền cuối cùng theo đồng hồ và quãng đường thực tế."
+                                 if "booking_slots" in state else "\nĐây là ước tính đến điểm đại diện có nguồn, chưa gồm phí hỗ trợ và chưa chốt điểm trả bên trong khu vực.")
         response["presentation"].update(
             scope_kind="inquiry",
             scope_id=item["inquiry_id"],
             inquiry_revision=item["revision"],
             valid_until=item["expires_at"],
         )
+        if "booking_slots" in state:
+            response["action"] = {"confirm_location": "confirm_slots", "offer_candidates": "clarify_address"}.get(response["action"], response["action"])
+            state["last_bot_action"] = {"action_type": response["action"], "target_slots": [],
+                                        "metadata": {**state["last_bot_action"]["metadata"], "scope_kind": "inquiry", "scope_id": item["inquiry_id"]}}
+            state["final_response_text"] = response["text"]
+            if state["messages"] and state["messages"][-1].get("response_id") == response["response_id"]:
+                state["messages"][-1]["content"] = response["text"]

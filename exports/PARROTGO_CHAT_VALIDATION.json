@@ -1,0 +1,16 @@
+{
+  "archive": "parrotgo-p016-source.zip",
+  "sha256": "00a07c0636258ab357b45302b2963ae0422e099dc146b83d2a49a60e23165498",
+  "archive_files": 175,
+  "archive_bytes": 638420,
+  "pytest": {"passed": 699, "seconds": 68.26, "tested_from": "extracted ZIP"},
+  "frontend_production_build": "passed; TypeScript and Vite from current source",
+  "openapi_frontend_contract": "passed",
+  "ruff_runtime_scripts": "passed; E9,F",
+  "zip_crc_and_manifest_hashes": "passed",
+  "existing_host_fixture": {"preserved_files": 23, "environment_isolation": "passed"},
+  "runtime_smoke": {"http_ui": "passed", "static_assets": "passed", "sessions": "passed", "core_func_text": "passed", "cli_help": "passed"},
+  "real_target_repository_inspected": false,
+  "scope": "P-016 directory overlay with isolated parrotgo_chat packages; host voice integration is documented but is not automatically rewired",
+  "legacy_deployment_tests": "Preserved as references; old VPS layout does not apply to this overlay"
+}

@@ -35,9 +35,22 @@ docker info >/dev/null 2>&1 || { printf 'Cannot reach Docker. Run as an account 
   printf 'Deployment files are missing from this checkout.\n' >&2; exit 1;
 }
 if $image; then
+  # Read only the selected image name as data; never source the private file.
   app_image=parrotgo:local
+  if [[ -f "$env_file" ]]; then
+    while IFS= read -r image_line || [[ -n "$image_line" ]]; do
+      if [[ "$image_line" == PARROTGO_IMAGE=* ]]; then
+        app_image=${image_line#*=}
+        app_image=${app_image%$'\r'}
+        if [[ "$app_image" == \'*\' || "$app_image" == \"*\" ]]; then
+          app_image=${app_image:1:${#app_image}-2}
+        fi
+        app_image=${app_image:-parrotgo:local}
+      fi
+    done < "$env_file"
+  fi
   if ! image_platform=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$app_image" 2>/dev/null); then
-    printf 'Load parrotgo:local with docker load before using --start --image.\n' >&2
+    printf 'Pull PARROTGO_IMAGE with docker pull or use docker load before --start --image.\n' >&2
     exit 1
   fi
   if ! daemon_platform=$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}' 2>/dev/null); then
@@ -107,6 +120,18 @@ if [[ -z "$secret" || "$secret" == CHANGE_ME || "$secret" == replace_me ]]; then
 fi
 unset secret
 
+voice_enabled=$(env_value VOICE_ENABLED)
+if [[ "$voice_enabled" == true ]]; then
+  voice_secret=$(env_value VOICE_AGENT_SECRET)
+  if [[ -z "$voice_secret" || "$voice_secret" == CHANGE_ME || "$voice_secret" == replace_me ]]; then
+    voice_secret=$(od -An -N48 -tx1 /dev/urandom | tr -d ' \n')
+    [[ "$voice_secret" =~ ^[0-9a-f]{96}$ ]] || { printf 'Could not generate voice secret.\n' >&2; exit 1; }
+    write_env VOICE_AGENT_SECRET "$voice_secret"
+    printf 'Generated VOICE_AGENT_SECRET without displaying it.\n'
+  fi
+  unset voice_secret
+fi
+
 hash=$(env_value BETA_PASSWORD_HASH)
 if [[ -z "$hash" || "$hash" == CHANGE_ME || "$hash" == replace_me ]]; then
   [[ -t 0 ]] || {
@@ -137,6 +162,23 @@ if ! $start; then
 fi
 
 missing=false
+if [[ -n "$voice_enabled" && "$voice_enabled" != true && "$voice_enabled" != false ]]; then
+  printf 'VOICE_ENABLED must be true or false.\n' >&2
+  missing=true
+fi
+if [[ "$voice_enabled" == true ]]; then
+  for required in LIVEKIT_URL LIVEKIT_API_KEY LIVEKIT_API_SECRET AZURE_SPEECH_KEY AZURE_SPEECH_REGION VOICE_AGENT_SECRET; do
+    value=$(env_value "$required")
+    if [[ -z "$value" || "$value" == CHANGE_ME || "$value" == replace_me ]]; then
+      printf 'Set %s privately in deploy/.env before starting voice mode.\n' "$required" >&2
+      missing=true
+    fi
+  done
+  [[ $(env_value LIVEKIT_URL) == wss://* ]] || { printf 'LIVEKIT_URL must start with wss://.\n' >&2; missing=true; }
+  voice_secret=$(env_value VOICE_AGENT_SECRET)
+  [[ ${#voice_secret} -ge 32 ]] || { printf 'VOICE_AGENT_SECRET must contain at least 32 characters.\n' >&2; missing=true; }
+  unset voice_secret
+fi
 for required in DOMAIN ACME_EMAIL BETA_USER APP_SECRET BETA_PASSWORD_HASH; do
   value=$(env_value "$required")
   if [[ -z "$value" || "$value" == CHANGE_ME || "$value" == replace_me || "$value" == *example.com* ]]; then
@@ -203,8 +245,14 @@ fi
 $missing && exit 1
 
 # Required interpolation values come from this deployment's private file.
-unset DOMAIN ACME_EMAIL BETA_USER BETA_PASSWORD_HASH APP_SECRET
+unset DOMAIN ACME_EMAIL BETA_USER BETA_PASSWORD_HASH APP_SECRET PARROTGO_IMAGE COMPOSE_PROFILES
 compose=(docker compose --project-name parrotgo --env-file "$env_file" -f "$deploy_dir/compose.yaml")
+if [[ "$voice_enabled" == true ]]; then
+  compose+=(--profile voice)
+else
+  # A previously enabled worker must not continue accepting calls in text mode.
+  "${compose[@]}" --profile voice stop voice-agent
+fi
 "${compose[@]}" config --quiet
 if $image; then
   "${compose[@]}" up -d --no-build --wait --wait-timeout 180
@@ -212,4 +260,4 @@ else
   "${compose[@]}" up -d --build --wait --wait-timeout 180
 fi
 "${compose[@]}" ps
-printf 'Services started. Verify HTTPS and the text chat using deploy/README.md.\n'
+printf 'Services started. Verify HTTPS and voice using deploy/VOICE_VPS.md.\n'

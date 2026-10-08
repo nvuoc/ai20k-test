@@ -7,3 +7,16 @@
 .chat-header, .mode-bar, .composer-area { flex-shrink: 0; }
 .conversation-content { display: flow-root; }
 .composer-area .working { margin: 0 0 10px; }
+.session-profile { max-width: 400px; margin: 12px auto 28px; padding: 24px; border: 1px solid #dfe7da; border-radius: 14px; background: #fafbf8; }
+.session-profile h2 { margin: 0 0 20px; font-size: 18px; color: #0c6556; }
+.session-profile label { display: block; margin: 14px 0; font-size: 12px; color: #344c3d; }
+.session-profile input { display: block; box-sizing: border-box; width: 100%; margin-top: 7px; padding: 11px; border: 1px solid #dfe7da; border-radius: 8px; font: inherit; background: white; }
+.session-profile button { padding: 11px 18px; border: 0; border-radius: 8px; color: white; background: #0c6556; font: inherit; }
+/* Voice controls sit beside the durable conversation transcript. */
+.voice-call { text-align: center; padding: 12px; }
+.voice-call p { margin: 8px 0; font-weight: 600; }
+.voice-call small { color: #67766e; }
+.voice-orb { display: grid; place-items: center; width: 52px; height: 52px; margin: auto; border-radius: 50%; background: #e4eee7; font-size: 24px; }
+.voice-orb.active { box-shadow: 0 0 0 8px #e4eee780; background: #cee8d5; }
+.voice-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 14px; }
+.voice-controls button { border: 1px solid #b8cec0; background: #f5faf6; color: #244932; padding: 10px 16px; border-radius: 20px; cursor: pointer; }

@@ -1,79 +1,84 @@
-# Backend chatbot đặt xe
+# Backend theo architecture_fixed.md
 
-FastAPI + LangGraph + SQLite, Groq GPT OSS 120B chính và Gemini Flash Lite dự phòng, VietMap và Open-Meteo. Lõi V3 dùng chung cho HTTP chat và `app.text.main(customer_text, session_id=...) -> str`. [Hướng dẫn cài/chạy và ví dụ main](../../README.md).
+HTTP, Text CLI và Python text adapter dùng chung `app/domain/booking_engine.py`. Kiến trúc hiện hành: [architecture_fixed.md](../../architecture_fixed.md); bảng đối chiếu: [ARCHITECTURE_IMPLEMENTATION.md](../../ARCHITECTURE_IMPLEMENTATION.md).
 
 | Thành phần | Trách nhiệm |
 | --- | --- |
-| `app/main.py`, `config.py` | Lifespan, API, owner cookie, Origin, public projections, static UI, config. |
-| `contracts/nlu.py`, `registry.py` | Strict input/output, đủ 12 slot, catalog/candidate validation. |
-| `contracts/turn.py`, `prompts/turn_v2.txt` | Một interpretation cho booking acts, questions, inquiry actions và travel party; literal evidence. |
-| `adapters/extractor.py` | Prompt, JSON parse, deadline/budget, repair tối đa 1 nếu caller bật. |
-| `adapters/nlu_gemini.py`, `rate_limit.py` | generateContent, provider schema, quota 15 RPM/cooldown SQLite. |
-| `adapters/nlu_groq.py`, `extraction_router.py`, `groq_rate_limit.py` | Strict chat completions, fallback có validation và deadline chung, quota RPM/token/cooldown riêng. |
-| `adapters/nlu_fixture.py` | Demo offline có phạm vi rõ; không fallback khi Gemini lỗi. |
-| `adapters/map_vietmap.py` | Search/place/route v4, cổng/ga, che key trong log. |
-| `adapters/map_fixture.py`, `quote_fixture.py`, `fixtures/` | Điểm/tuyến và bảng giá sandbox có nguồn/version. |
-| `domain/engine.py` | Apply cả lượt, issues, capacity/contact, revisions, consent, policy. |
-| `domain/conversation.py`, `inquiries.py` | Migration, inquiry có scope riêng, tám nhóm câu hỏi, resume/promote và final dispatch guards. |
-| `domain/location_parser.py`, `local_aliases.py` | Chuẩn hóa có giữ raw text, resolve anchor, alias có địa bàn/nguồn/version. |
-| `domain/location_confirmation.py`, `location_policy.py`, `assistance_policy.py` | Location proposal có ACK/revision/TTL, area registry có nguồn, phí sandbox và consent riêng. |
-| `contracts/weather.py`, `adapters/weather_open_meteo.py` | Forecast hourly có binding/coverage/TTL/đơn vị; lỗi nguồn không thành số 0. |
-| `app/text.py`, `main.py` | `main` đồng bộ, `main_async`, `TextBot` chạy lâu và CLI. |
-| `adapters/booking_sandbox.py` | Durable create/lookup/cancel, idempotency và fault test. |
-| `graph/builder.py` | AsyncSqliteSaver, checkpoint/resume/dedup theo event. |
-| `api_store.py`, `workers/coordinator.py` | Inbox, transcript/cursor, ACK, writer/phiên, phục hồi/đối soát. |
+| `contracts/booking.py` | Customer, BotState, AddressSlot, StopoverSlot, ValueSlot và readiness suy ra từ slot |
+| `domain/booking_engine.py` | Reducer duy nhất cho booking_slots, multi-intent, xác nhận theo phạm vi, hủy, geocode, Mega POI và dispatch |
+| `contracts/turn.py`, `prompts/turn_v2.txt` | Interpretation có evidence; projection architecture_state cho model |
+| `adapters/knowledge_base.py` | Tra cứu FAQ và đơn giá/km có version; không tính tiền trọn chuyến |
+| `adapters/crm_sqlite.py` | Lịch sử địa chỉ theo SĐT, gợi ý phải được xác nhận |
+| `domain/mega_poi.py` | Alias và default pickup/drop-off được cấu hình; tọa độ lấy từ bản đồ |
+| `domain/inquiries.py`, map/weather adapters | Hỏi tuyến, vị trí, quãng đường, thời gian và thời tiết với scope/freshness riêng |
+| `adapters/extraction_router.py` | Groq chính, Gemini dự phòng; schema/evidence validation và quota bền vững |
+| `graph/builder.py` | Checkpoint interpretation → prepare → finalize, phục hồi và dedup |
+| `api_store.py`, `workers/coordinator.py` | Inbox, transcript/cursor, ACK, một writer cho mỗi phiên |
+| `adapters/booking_sandbox.py` | Ledger tạo/hủy có idempotency; phục hồi commit mất phản hồi |
+| `app/text.py`, `main.py` | Hàm main/main_async, TextBot và CLI |
 
-OpenAI adapter cũ được giữ cho tương thích/kiểm thử. Runtime mới dùng Groq với Gemini dự phòng; `LLM_PROVIDER=gemini` vẫn giữ chế độ Gemini-only.
+`booking_slots` sở hữu dữ liệu nghiệp vụ. `booking_state`/`resolution` chỉ là projection cho NLU và read adapters. Provider receipt và giao dịch chưa rõ kết quả nằm trong `transaction`, tách khỏi trạng thái booking chuẩn.
 
-## Contract và tài liệu
+## Khởi tạo phiên
 
-[MVP_PLAN.md](../../MVP_PLAN.md) là kế hoạch duy nhất; [bảng versions](../../MVP_PLAN.md#contracts) chốt contract hiện tại. [langgraph.md](../../langgraph.md), [llmextractor.md](../../llmextractor.md), [map.md](../../map.md) và [llmplanner.md](../../llmplanner.md) mô tả các boundary và giới hạn.
+Tên/SĐT là bắt buộc. Server sinh UUID cho từng hội thoại; không dùng SĐT hoặc client_session_key làm UUID. SĐT tra CRM. Hồ sơ khác không được dùng lại khóa của phiên đã tồn tại.
 
-Trong tài liệu, ExtractorTurnResult là bí danh cho class TurnResult ở contracts/turn.py, không phải phản hồi bot. API trả AssistantResponse/ChatSnapshot; app.text.main trả str. MapAdapter trả dict đã chuẩn hóa theo MapResolution, status resolved và địa điểm tại place; không dùng unique/resolution/candidate_set làm wire schema hiện tại.
+CLI từ thư mục gốc:
 
-## HTTP API
+```powershell
+src/backend/.venv/Scripts/python.exe src/backend/main.py --phone 0901234567 --name An
+```
 
-Bootstrap trước để nhận cookie; dùng cùng cookie cho mọi request:
+Không truyền --session sẽ mở hội thoại mới. Truyền lại một khóa --session để tiếp tục qua restart. Các ví dụ offline ở [examples/converse_text.py](examples/converse_text.py).
+
+Python:
+
+```python
+from app.text import main
+
+reply = main("Đón ở Nhà hát Lớn Hà Nội, đến Ga Hà Nội, đi ngay, xe 4 chỗ",
+             session_id="conversation-key", customer_phone="0901234567", customer_name="An")
+reply = main("đúng", session_id="conversation-key")
+```
+
+Đối số session_id của text adapter là khóa tiếp tục hội thoại; UUID nội bộ do server sinh. main_async/TextBot có cùng tham số. TextBot mặc định coi lời bot trả về đã được nhận khi có lượt tiếp theo; tích hợp TTS chưa phát xong truyền acknowledge_previous=False. Giữ message_id khi retry cùng đầu vào.
+
+## HTTP
+
+GET /api/bootstrap trước để nhận owner cookie, sau đó dùng cùng cookie.
 
 | Method | Path | Kết quả |
 | --- | --- | --- |
-| GET | `/api/bootstrap` | Owner cookie + profile/capabilities công khai. |
-| POST | `/api/sessions` | `{client_session_key}` tạo/mở phiên idempotent. |
-| GET | `/api/sessions/{id}` | Snapshot/events/active response/booking/pending_count. |
-| POST | `/api/sessions/{id}/messages` | 202 sau khi lưu input, trả receipt. |
-| POST | `/api/sessions/{id}/actions` | Typed select/confirm/cancel, cùng domain guards. |
-| POST | `/api/sessions/{id}/delivery-acks` | Evidence đã render response hiện hành. |
-| GET | `/api/sessions/{id}/updates` | after_cursor/limit/has_more/next_cursor. |
-| GET | `/api/sessions/{id}/booking` | Đọc kết quả đã xuất bản. |
-| GET | `/api/sessions/{id}/weather` | `at` có timezone, `target=pickup|destination`, tùy chọn `inquiry_id`; không sửa chuyến. |
-| GET | `/api/health`, `/api/ready` | Không gọi provider, không trả secrets. |
+| POST | /api/sessions | client_session_key, customer_phone, customer_name; tạo/mở phiên idempotent |
+| GET | /api/sessions/{id} | Snapshot, events, active_response, profile, architecture_version |
+| POST | /api/sessions/{id}/messages | Lưu input và trả 202 receipt |
+| POST | /api/sessions/{id}/actions | Chọn candidate, xác nhận tạo cuốc, yêu cầu/xác nhận hủy, thao tác inquiry |
+| POST | /api/sessions/{id}/delivery-acks | Bằng chứng response hiện hành đã render |
+| GET | /api/sessions/{id}/updates | Cursor/limit/has_more/next_cursor |
+| GET | /api/sessions/{id}/booking | Kết quả provider công khai |
+| GET | /api/sessions/{id}/weather | at có timezone, target pickup/destination, tùy chọn inquiry_id |
+| GET | /api/health, /api/ready | Trạng thái nội bộ, không gọi provider |
 
-Message body:
-
-```json
-{"client_message_id":"stable-on-retry","text":"Đón ở Nhà hát Lớn Hà Nội, đến Ga Hà Nội, đi ngay, 2 người, xe 4 chỗ, số 0901234567","reply_to_response_id":null,"rendered_response_ids":[]}
-```
-
-Action body có `client_action_id`, `action`, `reply_to_response_id`, `rendered_response_ids`. Confirm action lấy server refs từ active_response.presentation/summary:
+Session body:
 
 ```json
-{"type":"confirm_booking","prompt_id":"from-server","booking_revision":1,"snapshot_fingerprint":"from-server"}
+{"client_session_key":"trip-one","customer_phone":"0901234567","customer_name":"An"}
 ```
 
-Select action: `{type:"select_candidate",candidate_set_id,candidate_id}`. Cancel action: `{type:"cancel_booking",booking_id}` hoặc `{type:"cancel_draft",draft_id}`. Client không gửi GraphState, key, ngân sách, giá hoặc quyền provider.
+Message body có client_message_id, text, reply_to_response_id và rendered_response_ids. ACK/reply phải thuộc phiên và presentation hiện hành; “đúng” chỉ xác nhận last_bot_action.target_slots. Sau xác nhận địa chỉ và slot, bot trình bày TripSummary với tariff.per_km, tariff.source, final_amount_basis=meter; không có fare/quote trọn chuyến.
 
-API V2 bổ sung `{type:"use_inquiry_route",inquiry_id,inquiry_revision,booking_revision,route_fingerprint}`, `{type:"choose_inquiry_vehicle",inquiry_id,inquiry_revision,vehicle_type}`, `{type:"resume_booking"}` và `{type:"dismiss_inquiry",inquiry_id,inquiry_revision}`. Refs lấy từ active response; chọn tuyến chưa phải đồng ý đặt. Candidate/presentation có scope booking/inquiry. Bootstrap công bố brand, catalog và capability từ runtime. Snapshot có `waiting_for_quota`, `retry_at`; input đã lưu sẽ tiếp tục tự động.
+Actions lấy refs từ response server: select_candidate dùng candidate_set_id/candidate_id; confirm_booking dùng prompt_id/booking_revision/snapshot_fingerprint. cancel_draft/cancel_booking chỉ **yêu cầu** hủy. Bot trả confirm_cancel; action confirm_cancel dùng prompt_id và ACK hiện hành mới thực hiện hủy. Giao diện web dùng lời khách dạng text cho các bước này.
 
-## Gemini
+Chọn/promote inquiry chỉ sửa draft và yêu cầu xác nhận mới, không cấp quyền tạo cuốc. Tra cứu giả định không sửa booking_slots. Readiness không phải consent. Giao dịch đang đối soát không được tạo/hủy thêm.
 
-Native HTTP dùng `x-goog-api-key`, model từ GEMINI_MODEL. Wire schema được rút về subset provider hỗ trợ; local Pydantic giữ toàn bộ constraints/cross-field/catalog/reference checks. JSON đúng schema không cấp quyền giao dịch.
+## Cấu hình
 
-Router dùng tối đa hai calls mỗi lần xử lý: một Groq, một Gemini nếu lỗi transport/output và còn deadline chung 25s. Không repair trong cùng provider khi router bật; không fallback fixture. Refusal/input sai dừng; lỗi key/model/schema chỉ degraded khi bật rõ `LLM_ALLOW_DEGRADED`. Mỗi provider có quota/cooldown bền vững riêng. Khi model đếm lệch offset, chỉ căn lại bằng literal duy nhất trong đầu vào; output/schema/evidence/catalog/version đều phải hợp lệ trước khi ghi state. Inbox retry lỗi dịch vụ có giới hạn, ACK/proposal và transaction idempotency vẫn được giữ.
+Xem [.env.example](.env.example). KNOWLEDGE_BASE_PATH là JSON versioned có policies và ba loại xe xe_may/oto_4_cho/oto_7_cho, đơn giá per_km và route_profile. MEGA_POI_PATH là JSON alias/default truy vấn; map adapter phải xác minh trước khi dùng. LOCAL_ALIAS_PATH/SERVICE_AREA_PATH cấu hình dữ liệu địa điểm. Lõi hiện hành luôn xác nhận các slot; flags tự chốt/phí hỗ trợ của V3 không bật hành vi cũ.
 
-V3 dùng location decisions qua văn bản, không thêm nút chat. Proposal bind nơi/phiên/revision/vehicle/policy/TTL và response đã render. “Đúng” xác nhận địa điểm; “đồng ý phí” xác nhận gói hỗ trợ; tạo đơn vẫn cần summary mới được xác nhận riêng. Area inquiry chỉ tính thử đến điểm đại diện, không promote thành điểm vận hành. Gói hỗ trợ mặc định tắt, chỉ sandbox; reviewed live registry phải có nguồn và kiểm chứng điểm tiếp cận.
+Router có tối đa hai provider calls với deadline chung; không tự chuyển sang fixture khi dịch vụ live lỗi. Quota/cooldown được lưu riêng. Lỗi cấu hình báo lỗi dịch vụ và giữ phiên để khách có thể gửi tiếp; rate limit giữ input chờ xử lý. Key, URL chứa key và state nội bộ không đi ra public projection.
 
-Graph V2 có `interpret_turn → prepare_turn → process_turn`: interpreter/facts được checkpoint trước dispatch. Câu hỏi độc lập không ghi booking slots, scheduled issue hoặc consent. Dùng inquiry để đặt luôn làm lại summary/quote và đòi consent mới. Phiên v1 pending/unknown giữ đường tương thích cho đến kết quả xác định.
+Scheduled pickup giữ lời khách và thời điểm diễn giải có timezone/mốc tin nhắn, kiểm tra lại trước dispatch. Hành khách là tùy chọn; nếu có thì phải phù hợp loại xe. Stopovers được geocode, xác nhận và đưa vào từng chặng lộ trình.
 
-Sandbox một chiều, đặt ngay; hai ô tô bật mặc định, xe máy điện chỉ bật khi catalog/tariff/profile/chính sách đủ cấu hình. Chưa có driver/OTP/payment/nhiều workers. Cần holdout rộng trước khi cam kết hiểu mọi câu tiếng Việt. Trạng thái nghiệm thu: [MVP_STATUS.md](../../MVP_STATUS.md).
+LegacyConversationEngine/reducer/quote V1–V3 chỉ phục vụ hồi quy tương thích lịch sử. Phiên thiếu hồ sơ không tái sử dụng consent cũ; mở phiên mới có tên/SĐT, giữ dữ liệu/ledger cũ để kiểm tra.
 
-Nguồn: [Gemini generateContent](https://ai.google.dev/api/generate-content), [VietMap route v4](https://maps.vietmap.vn/docs/map-api/route-version/route-v4/), [Open-Meteo Forecast API](https://open-meteo.com/en/docs), [Open-Meteo terms](https://open-meteo.com/en/terms).
+Provider tạo/hủy vẫn là sandbox, chưa điều phối tài xế; operator_required là trạng thái chờ hỗ trợ. KB/địa điểm/tuyến đi kèm là dữ liệu thử nghiệm, cần cấu hình nguồn vận hành trước khi phục vụ khách thật.

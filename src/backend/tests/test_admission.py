@@ -23,6 +23,25 @@ def add_session(storage, sid="session", owner="owner", key="client"):
     return storage.create_session(sid, owner, key, new_state(sid))
 
 
+def test_disabled_admission_limits_allow_sessions_and_messages_after_restart(tmp_path):
+    storage = store(tmp_path, admission_limits_enabled=False,
+        inbound_owner_rpm=1, inbound_global_rpm=1,
+        max_sessions_per_owner=1, max_sessions_total=1,
+        max_pending_per_session=1, max_pending_total=1)
+    for index in range(3):
+        add_session(storage, sid=f"session-{index}", key=f"client-{index}")
+        for message in range(3):
+            payload = {"text": "Xin chào"}
+            receipt = storage.enqueue(f"session-{index}", "message", str(message), payload)
+            retry = storage.enqueue(f"session-{index}", "message", str(message), payload)
+            assert retry["event_id"] == receipt["event_id"]
+        storage = ApiStore(storage.path, limits=storage.limits)
+    with storage.connection() as db:
+        assert db.execute("SELECT COUNT(*) FROM api_sessions").fetchone()[0] == 3
+        assert db.execute("SELECT COUNT(*) FROM api_inbox").fetchone()[0] == 9
+        assert db.execute("SELECT COUNT(*) FROM api_admission_requests").fetchone()[0] == 0
+
+
 def test_owner_and_global_session_caps_are_persisted_and_idempotent(tmp_path):
     storage = store(tmp_path, max_sessions_per_owner=1, max_sessions_total=2)
     assert add_session(storage) == "session"
@@ -126,11 +145,11 @@ def api_settings(tmp_path, **limits):
 def test_api_session_cap_429_preserves_existing_session_and_bounded_creation_lock(tmp_path):
     with TestClient(create_app(api_settings(tmp_path, max_sessions_per_owner=1))) as client:
         client.get("/api/bootstrap")
-        first = client.post("/api/sessions", json={"client_session_key": "one"})
+        first = client.post("/api/sessions", json={"client_session_key": "one", "customer_phone": "0901234567", "customer_name": "An"})
         assert first.status_code == 200
-        denied = client.post("/api/sessions", json={"client_session_key": "two"})
+        denied = client.post("/api/sessions", json={"client_session_key": "two", "customer_phone": "0901234567", "customer_name": "An"})
         assert denied.status_code == 429 and denied.json()["code"] == "OWNER_SESSION_LIMIT"
-        assert client.post("/api/sessions", json={"client_session_key": "one"}).json()["session_id"] == first.json()["session_id"]
+        assert client.post("/api/sessions", json={"client_session_key": "one", "customer_phone": "0901234567", "customer_name": "An"}).json()["session_id"] == first.json()["session_id"]
         assert isinstance(client.app.state.creation_lock, asyncio.Lock)
         assert not hasattr(client.app.state, "creation_locks")
 
@@ -138,7 +157,7 @@ def test_api_session_cap_429_preserves_existing_session_and_bounded_creation_loc
 def test_api_rate_429_has_retry_after_and_duplicate_receipt_still_works(tmp_path):
     with TestClient(create_app(api_settings(tmp_path, inbound_owner_rpm=2))) as client:
         client.get("/api/bootstrap")
-        session = client.post("/api/sessions", json={"client_session_key": "one"}).json()["session_id"]
+        session = client.post("/api/sessions", json={"client_session_key": "one", "customer_phone": "0901234567", "customer_name": "An"}).json()["session_id"]
         path = f"/api/sessions/{session}/messages"
         payload = {"client_message_id": "one", "text": "Xin chào"}
         first = client.post(path, json=payload)
@@ -196,8 +215,8 @@ def test_api_session_retries_repair_graph_initialization_without_extra_admission
                 raise RuntimeError("temporary checkpoint failure")
             return await original(session_id, state)
         graph.initialize = fault
-        assert client.post("/api/sessions", json={"client_session_key": "one"}).status_code == 500
-        repaired = client.post("/api/sessions", json={"client_session_key": "one"})
+        assert client.post("/api/sessions", json={"client_session_key": "one", "customer_phone": "0901234567", "customer_name": "An"}).status_code == 500
+        repaired = client.post("/api/sessions", json={"client_session_key": "one", "customer_phone": "0901234567", "customer_name": "An"})
         assert repaired.status_code == 200
         with client.app.state.store.connection() as db:
             assert db.execute("SELECT COUNT(*) FROM api_sessions").fetchone()[0] == 1

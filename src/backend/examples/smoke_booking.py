@@ -34,6 +34,7 @@ def main() -> int:
             client.get("/api/bootstrap").raise_for_status()
             snapshot = client.post("/api/sessions", json={
                 "client_session_key": uuid.uuid4().hex,
+                "customer_phone": "0901234567", "customer_name": "An",
             }).json()
             session_id = snapshot["session_id"]
 
@@ -64,15 +65,18 @@ def main() -> int:
 
             snapshot = submit("messages", "Đón tôi ở Nhà hát Lớn Hà Nội, đến Ga Hà Nội, "
                               "đi ngay, 2 người, xe 4 chỗ, số điện thoại 0901234567.")
-            for _ in range(6):
+            for _ in range(12):
                 response = snapshot["active_response"]
-                if response["action"] != "offer_candidates":
+                if response["action"] == "confirm_slots":
+                    snapshot = submit("messages", "đúng")
+                    continue
+                if not response["candidates"]:
                     break
                 candidate = response["candidates"][0]
                 snapshot = submit("actions", {"type": "select_candidate",
                     "candidate_set_id": candidate["candidate_set_id"],
                     "candidate_id": candidate["candidate_id"]})
-            if snapshot["booking_status"] != "awaiting_confirmation":
+            if snapshot["booking_status"] != "ready_to_book":
                 raise RuntimeError("NO_CURRENT_SUMMARY")
             summary = snapshot["active_response"]["summary"]
             snapshot = submit("actions", {"type": "confirm_booking",
@@ -85,10 +89,11 @@ def main() -> int:
             if restored["booking"]["booking_id"] != booking_id:
                 raise RuntimeError("RESTORE_MISMATCH")
             snapshot = submit("actions", {"type": "cancel_booking", "booking_id": booking_id})
-            if snapshot["booking_status"] != "cancelled":
+            snapshot = submit("actions", {"type": "confirm_cancel", "prompt_id": snapshot["active_response"]["presentation"]["prompt_id"]})
+            if snapshot["booking_status"] != "canceled":
                 raise RuntimeError("CANCELLATION_NOT_CONFIRMED")
             report.update(passed=True, booking_id=booking_id,
-                          natural_turns=1, final_status="cancelled")
+                          natural_turns=1, final_status="canceled")
     except Exception as exc:
         # Keep provider error bodies and key-bearing URLs out of diagnostics.
         report["error_type"] = type(exc).__name__

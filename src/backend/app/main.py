@@ -99,11 +99,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def public_config():
         value = app.state.config.public()
         engine = app.state.engine
-        value["capabilities"].update(location_confirmation=engine.location_confirmation, area_estimate=engine.location_confirmation, area_assistance=engine.area_assistance_enabled, text_only_chat=True)
+        value["capabilities"].update(location_confirmation=engine.location_confirmation, area_estimate=engine.location_confirmation, area_assistance=engine.area_assistance_enabled, text_only_chat=not app.state.config.voice_enabled, voice_booking=app.state.config.voice_enabled)
         value["capabilities"]["electric_motorbike"] = bool(engine.vehicle_catalog.get("xe_may_dien", {}).get("bookable"))
         value["capabilities"]["weather"] = engine.inquiry_service.weather is not None
         value["vehicles"] = [{"code":code, "label":row["label"], "max_passengers":row["max_passengers"]}
-            for code, row in engine.vehicle_catalog.items() if row.get("bookable") and code in {"oto_4_cho", "oto_7_cho", "xe_may_dien"}]
+            for code, row in engine.vehicle_catalog.items() if row.get("bookable") and code in {"xe_may", "oto_4_cho", "oto_7_cho", "xe_may_dien"}]
         return value
 
     app = FastAPI(title="ParrotGo · Chat đặt xe thử nghiệm", version="2.0.0", lifespan=lifespan,
@@ -187,6 +187,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         state = snapshot.pop("state")
         # Only approved chat facts and presentation refs cross the API boundary.
         snapshot.update({"api_version": "chat-api-3" if state.get("control", {}).get("schema_version", 4) >= 6 else "chat-api-2", "booking_status": state.get("booking_status"),
+                         "architecture_version": "architecture-fixed-1" if "booking_slots" in state else None,
+                         "customer_name": state.get("customer_name"), "customer_phone": state.get("customer_phone"),
                          "booking": safe_booking(state.get("transaction", {}).get("booking_result")),
                          "draft_id": state.get("control", {}).get("draft_id"),
                          "active_response": safe_response(state.get("last_response"))})
@@ -240,11 +242,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         async with app.state.creation_lock:
             session_id = app.state.store.find_session(owner_id, body.client_session_key)
             if not session_id:
-                session_id = "session_" + uuid.uuid4().hex
-                state = app.state.engine.new_state(session_id)
+                session_id = str(uuid.uuid4())
+                state = app.state.engine.new_state(session_id, customer_phone=body.customer_phone,
+                                                   customer_name=body.customer_name)
                 session_id = app.state.store.create_session(session_id, owner_id, body.client_session_key, state)
             else:
                 state = app.state.store.snapshot(session_id)["state"]
+                if state.get("customer_phone") != body.customer_phone or state.get("customer_name") != body.customer_name:
+                    raise Conflict("SESSION_CUSTOMER_CONFLICT")
             # If initialization failed after durable admission, the same client
             # key repairs that session on retry instead of creating another one.
             await app.state.graph.initialize(session_id, state)
@@ -319,6 +324,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return await adapter.forecast(WeatherRequest(request_id="weather_"+dep[:24],
             scope_kind=scope_kind, scope_id=scope_id, location_ref=place["id"],
             latitude=place["lat"], longitude=place["lon"], target_time=at, dependency_fingerprint=dep))
+
+    from app.voice.api import install_voice_routes
+    install_voice_routes(app, owned=owned, project=projection)
 
     dist = ROOT.parent / "frontend/dist"
     if (dist / "assets").is_dir():

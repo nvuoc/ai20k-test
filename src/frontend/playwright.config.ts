@@ -11,6 +11,7 @@ export default defineConfig({
     url: 'http://127.0.0.1:8001/api/ready', reuseExistingServer: false,
     env: {
       APP_PROFILE: 'test', APP_SECRET: 'e2e-stable-secret',
+      VOICE_ENABLED: 'false',
       BUSINESS_DB_PATH: path.resolve('../../.cache/e2e/app.sqlite'),
       CHECKPOINT_DB_PATH: path.resolve('../../.cache/e2e/checkpoints.sqlite'),
       ALLOWED_ORIGINS: 'http://127.0.0.1:8001',

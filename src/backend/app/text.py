@@ -9,6 +9,7 @@ from dataclasses import replace
 
 from app.api_store import ApiStore
 from app.config import Settings
+from app.contracts.booking import normalize_phone
 from app.contracts.chat import MessageInput
 from app.runtime import conversation_runtime
 from app.workers.coordinator import Coordinator
@@ -57,6 +58,8 @@ class TextBot:
         message_id: str | None = None,
         acknowledge_previous: bool = True,
         timeout_seconds: float = 120,
+        customer_phone: str | None = None,
+        customer_name: str | None = None,
     ) -> str:
         if not self._context:
             raise RuntimeError("Use 'async with TextBot(...) as bot'")
@@ -67,11 +70,18 @@ class TextBot:
         async with lock:
             sid = self.store.find_session("local-text", session_id)
             if sid is None:
-                sid = "text_" + uuid.uuid4().hex
-                state = self.engine.new_state(sid)
+                if customer_phone is None or customer_name is None:
+                    raise ValueError("Nhập customer_phone và customer_name để bắt đầu phiên")
+                sid = str(uuid.uuid4())
+                state = self.engine.new_state(sid, customer_phone=customer_phone,
+                                              customer_name=customer_name)
                 await self.graph.initialize(sid, state)
                 self.store.create_session(sid, "local-text", session_id, state)
             snapshot = self.store.snapshot(sid)
+            profile = snapshot["state"]
+            if ((customer_phone is not None and normalize_phone(customer_phone) != profile.get("customer_phone"))
+                    or (customer_name is not None and customer_name.strip() != profile.get("customer_name"))):
+                raise ValueError("Phiên đã thuộc khách hàng khác. Dùng khóa phiên mới cho khách hàng này.")
             response = snapshot["state"].get("last_response")
             if response and acknowledge_previous:
                 message.reply_to_response_id = response["response_id"]
@@ -115,9 +125,12 @@ async def main_async(
     session_id: str = "default",
     settings: Settings | None = None,
     message_id: str | None = None,
+    customer_phone: str | None = None,
+    customer_name: str | None = None,
 ) -> str:
     async with TextBot(settings) as bot:
-        return await bot.ask(customer_text, session_id=session_id, message_id=message_id)
+        return await bot.ask(customer_text, session_id=session_id, message_id=message_id,
+                             customer_phone=customer_phone, customer_name=customer_name)
 
 
 def main(
@@ -126,6 +139,8 @@ def main(
     session_id: str = "default",
     settings: Settings | None = None,
     message_id: str | None = None,
+    customer_phone: str | None = None,
+    customer_name: str | None = None,
 ) -> str:
     """Return the bot's spoken text. Reuse session_id to retain conversation state."""
     try:
@@ -133,7 +148,8 @@ def main(
     except RuntimeError:
         return asyncio.run(
             main_async(
-                customer_text, session_id=session_id, settings=settings, message_id=message_id
+                customer_text, session_id=session_id, settings=settings, message_id=message_id,
+                customer_phone=customer_phone, customer_name=customer_name
             )
         )
     raise RuntimeError(

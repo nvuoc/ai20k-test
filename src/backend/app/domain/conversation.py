@@ -1,4 +1,8 @@
-"""V2 conversation orchestration on the existing booking transaction guards."""
+"""Archived V2/V3 orchestration; export the current architecture-fixed engine.
+
+LegacyConversationEngine is only used by historical compatibility tests.
+HTTP, TextBot and CLI run domain.booking_engine.ConversationEngine.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +18,7 @@ from app.contracts.nlu import NluInput, NluResult, validate_candidate_references
 from app.contracts.turn import QuestionIntent, TurnInput, TurnResult
 from app.domain.assistance_policy import AssistancePolicy
 from app.domain.engine import ChatEngine, acknowledge, new_state, normalized
-from app.domain.inquiries import InquiryService
+from app.domain.inquiries import MAP_QUESTIONS, InquiryService
 from app.domain.location_confirmation import (
     LOCATION_PURPOSES,
     LocationWorkflowMixin,
@@ -63,14 +67,14 @@ def migrate_state(state: dict) -> dict:
 def new_conversation_state(session_id: str, draft_id: str | None = None) -> dict:
     state = migrate_state(new_state(session_id, draft_id))
     state["last_response"]["text"] = (
-        "Mình là trợ lý đặt xe ParrotGo. Bạn có thể hỏi giá, tuyến đường, thời tiết hoặc đặt một chuyến thử nghiệm. Bạn cần mình giúp gì?"
+        "Mình là trợ lý đặt xe ParrotGo. Bạn có thể hỏi vị trí địa điểm, giá, tuyến đường, thời tiết hoặc đặt một chuyến thử nghiệm. Bạn cần mình giúp gì?"
     )
     state["last_response"]["presentation"]["contract_version"] = "chat-presentation-2"
     state["last_response"]["inquiry"] = None
     return state
 
 
-class ConversationEngine(LocationWorkflowMixin, ChatEngine):
+class LegacyConversationEngine(LocationWorkflowMixin, ChatEngine):
     def __init__(
         self,
         *args,
@@ -171,7 +175,7 @@ class ConversationEngine(LocationWorkflowMixin, ChatEngine):
                     "electric_motorbike": bool(
                         self.vehicle_catalog.get("xe_may_dien", {}).get("bookable")
                     ),
-                    "scheduled": False,
+                    "scheduled": True,
                 },
                 "occurred_at": datetime.fromtimestamp(occurred_at, UTC).isoformat(),
             }
@@ -205,7 +209,7 @@ class ConversationEngine(LocationWorkflowMixin, ChatEngine):
             validate_candidate_references(result, data)
             return {"kind": "legacy", "result": result.model_dump(mode="json"), "occurred_at": when}
         except ExtractorError as exc:
-            if exc.retryable or getattr(exc, "configuration_error", False) or exc.code in {"RATE_LIMITED", "RATE_LIMIT", "QUOTA_EXCEEDED", "PROVIDER_AUTH_ERROR", "PROVIDER_MODEL_UNAVAILABLE", "PROVIDER_CONFIG_ERROR"}:
+            if exc.retryable or exc.code in {"RATE_LIMITED", "RATE_LIMIT", "QUOTA_EXCEEDED"}:
                 raise
             return {"kind": "error", "code": exc.code, "occurred_at": when}
         except (ValueError, TypeError):
@@ -253,7 +257,9 @@ class ConversationEngine(LocationWorkflowMixin, ChatEngine):
             return self._respond(
                 state,
                 "ask_clarification",
-                "Mình chưa hiểu chắc tin nhắn này. Bạn viết rõ hơn giúp mình nhé; thông tin chuyến vẫn được giữ.",
+                ("Dịch vụ AI đang gặp lỗi cấu hình. Thông tin chuyến vẫn được giữ; bạn có thể gửi tiếp hoặc thử lại sau."
+                 if interpretation["code"] in {"PROVIDER_AUTH_ERROR", "PROVIDER_MODEL_UNAVAILABLE", "PROVIDER_CONFIG_ERROR"}
+                 else "Mình chưa hiểu chắc tin nhắn này. Bạn viết rõ hơn giúp mình nhé; thông tin chuyến vẫn được giữ."),
                 reason=interpretation["code"],
             )
         if state["control"]["schema_version"] < 5 or interpretation["kind"] == "legacy":
@@ -266,6 +272,7 @@ class ConversationEngine(LocationWorkflowMixin, ChatEngine):
                 delivered_response_ids=event.get("delivered_response_ids"),
                 reply_to_response_id=event.get("reply_to_response_id"),
                 allow_dispatch=False,
+                occurred_at=interpretation["occurred_at"],
             )
         result = (
             TurnResult.model_validate(interpretation["result"])
@@ -508,6 +515,7 @@ class ConversationEngine(LocationWorkflowMixin, ChatEngine):
                 delivered_response_ids=event.get("delivered_response_ids"),
                 reply_to_response_id=event.get("reply_to_response_id"),
                 allow_dispatch=False,
+                occurred_at=interpretation["occurred_at"],
             )
             state["turn"]["occurred_at"] = interpretation["occurred_at"]
         else:
@@ -524,11 +532,8 @@ class ConversationEngine(LocationWorkflowMixin, ChatEngine):
                     answer = await service.answer(state, questions)
             except TimeoutError:
                 answer = "Một phần dữ liệu đang phản hồi chậm. Thông tin chuyến vẫn được giữ; bạn có thể hỏi lại phần chưa có."
-            has_route = any(
-                q.type in {"fare_estimate", "route_distance", "travel_duration", "travel_duration_explanation", "weather_forecast"}
-                for q in questions
-            )
-            if has_route:
+            has_inquiry = any(q.type in MAP_QUESTIONS for q in questions)
+            if has_inquiry:
                 self._respond(state, "answer_question", answer)
                 service.attach_presentation(state)
                 item = service.active(state)
@@ -577,6 +582,12 @@ class ConversationEngine(LocationWorkflowMixin, ChatEngine):
             return self._respond(state, "inform_success", self._booking_text(state))
         if state["turn"].get("pending_cancel_requested"):
             return await self._cancel(state, event["event_id"])
+        if state["turn"].get("ready_to_dispatch") and not self._pickup_time_valid(state):
+            state["confirmation"]["accepted_snapshot"] = None
+            self._validate_requirements(state)
+            self._decide_response(state)
+            state["last_response"]["reason"] = "PICKUP_TIME_ELAPSED"
+            return state
         if state["turn"].get("ready_to_dispatch") and not self._quote_valid(state):
             state["confirmation"]["accepted_snapshot"] = None
             state["confirmation"]["pending_prompt"] = None
@@ -738,3 +749,8 @@ class ConversationEngine(LocationWorkflowMixin, ChatEngine):
                 f"\nThành phần khách: {party['adults'] if party['adults'] is not None else 'chưa rõ'} người lớn, {party['children'] if party['children'] is not None else 'chưa rõ'} trẻ em."
             )
         return result
+
+
+# Old policy is retained only for checkpoint compatibility/regression fixtures.
+# All new callers use the architecture_fixed.md implementation.
+from app.domain.booking_engine import ConversationEngine  # noqa: E402,F401

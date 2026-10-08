@@ -2,7 +2,7 @@ name: parrotgo
 
 services:
   app:
-    image: parrotgo:local
+    image: "${PARROTGO_IMAGE:-parrotgo:local}"
     pull_policy: never
     build:
       context: ..
@@ -14,6 +14,8 @@ services:
     environment:
       # These values are enforced for this HTTPS deployment.
       COOKIE_SECURE: "true"
+      VOICE_ENABLED: "${VOICE_ENABLED:-false}"
+      ADMISSION_LIMITS_ENABLED: "${ADMISSION_LIMITS_ENABLED:-false}"
       ALLOWED_ORIGINS: "https://${DOMAIN:?Set DOMAIN in deploy/.env}"
       APP_SECRET: "${APP_SECRET:?Run bash deploy/setup.sh first}"
       BUSINESS_DB_PATH: /app/backend/data/app.sqlite
@@ -40,6 +42,48 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  voice-agent:
+    image: "${PARROTGO_IMAGE:-parrotgo:local}"
+    pull_policy: never
+    profiles: [voice]
+    command: [python, -m, app.voice.agent, start]
+    restart: unless-stopped
+    init: true
+    environment:
+      VOICE_API_URL: http://app:8000
+      VOICE_AGENT_SECRET: "${VOICE_AGENT_SECRET:-}"
+      LIVEKIT_URL: "${LIVEKIT_URL:-}"
+      LIVEKIT_API_KEY: "${LIVEKIT_API_KEY:-}"
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET:-}"
+      LIVEKIT_AGENT_NAME: "${LIVEKIT_AGENT_NAME:-parrotgo-booking}"
+      AZURE_SPEECH_KEY: "${AZURE_SPEECH_KEY:-}"
+      AZURE_SPEECH_REGION: "${AZURE_SPEECH_REGION:-}"
+      AZURE_SPEECH_VOICE: "${AZURE_SPEECH_VOICE:-vi-VN-HoaiMyNeural}"
+      AZURE_TTS_ENDPOINT: "${AZURE_TTS_ENDPOINT:-}"
+    depends_on:
+      app:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    pids_limit: 256
+    mem_limit: 2g
+    stop_grace_period: 60s
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     logging:
       driver: json-file
       options:

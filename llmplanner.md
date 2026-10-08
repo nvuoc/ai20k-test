@@ -1,3 +1,5 @@
+> Tài liệu V1–V3 lịch sử. Kiến trúc đang thực thi được chốt tại [architecture_fixed.md](architecture_fixed.md), đối chiếu triển khai tại [ARCHITECTURE_IMPLEMENTATION.md](ARCHITECTURE_IMPLEMENTATION.md).
+
 # Phản hồi văn bản và hướng mở rộng voice ParrotGo V2
 
 Cập nhật: 02/10/2026. Runtime hiện tại là text/chat: code/domain chọn action, facts và template rồi trả AssistantResponse hoặc str. Tài liệu mô tả đường phản hồi đang có và giữ thiết kế voice/audio trong các mục mở rộng. Phạm vi duy nhất ở [MVP_PLAN.md](MVP_PLAN.md), state/consent ở [langgraph.md](langgraph.md), diễn giải ở [llmextractor.md](llmextractor.md), dữ liệu địa điểm ở [map.md](map.md).

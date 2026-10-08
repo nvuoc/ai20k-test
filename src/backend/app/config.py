@@ -52,10 +52,19 @@ class Settings:
     area_assistance_enabled: bool = False
     assistance_policy_path: Path | None = None
     service_area_path: Path | None = None
+    knowledge_base_path: Path | None = None
+    mega_poi_path: Path | None = None
     traffic_enabled: bool = True
     traffic_ttl_seconds: int = 60
+    voice_enabled: bool = False
+    livekit_url: str = ""
+    livekit_api_key: str = ""
+    livekit_api_secret: str = ""
+    livekit_agent_name: str = "parrotgo-booking"
+    voice_agent_secret: str = ""
     cookie_secure: bool = False
     max_request_body_bytes: int = 65536
+    admission_limits_enabled: bool = True
     inbound_owner_rpm: int = 120
     inbound_global_rpm: int = 600
     max_sessions_per_owner: int = 100
@@ -94,6 +103,12 @@ class Settings:
                 secret_path.write_text(secrets.token_urlsafe(48), encoding="utf-8")
             secret = secret_path.read_text(encoding="utf-8").strip()
         settings = cls(
+            voice_enabled=os.getenv("VOICE_ENABLED", "true").lower() == "true",
+            livekit_url=os.getenv("LIVEKIT_URL", ""),
+            livekit_api_key=os.getenv("LIVEKIT_API_KEY", ""),
+            livekit_api_secret=os.getenv("LIVEKIT_API_SECRET", ""),
+            livekit_agent_name=os.getenv("LIVEKIT_AGENT_NAME", "parrotgo-booking"),
+            voice_agent_secret=os.getenv("VOICE_AGENT_SECRET", ""),
             profile=profile, secret=secret, database_path=data_path,
             checkpoint_path=checkpoint_path,
             gemini_rate_path=rate_path,
@@ -130,10 +145,13 @@ class Settings:
             area_assistance_enabled=os.getenv("AREA_ASSISTANCE_ENABLED", "false").lower() == "true",
             assistance_policy_path=Path(os.environ["ASSISTANCE_POLICY_PATH"]).resolve() if os.getenv("ASSISTANCE_POLICY_PATH") else None,
             service_area_path=Path(os.environ["SERVICE_AREA_PATH"]).resolve() if os.getenv("SERVICE_AREA_PATH") else None,
+            mega_poi_path=Path(os.environ["MEGA_POI_PATH"]) if os.getenv("MEGA_POI_PATH") else None,
+            knowledge_base_path=Path(os.environ["KNOWLEDGE_BASE_PATH"]).resolve() if os.getenv("KNOWLEDGE_BASE_PATH") else None,
             traffic_enabled=os.getenv("TRAFFIC_ENABLED", "true").lower() == "true",
             traffic_ttl_seconds=int(os.getenv("TRAFFIC_TTL_SECONDS", "60")),
             cookie_secure=os.getenv("COOKIE_SECURE", "false").lower() == "true",
             max_request_body_bytes=int(os.getenv("MAX_REQUEST_BODY_BYTES", "65536")),
+            admission_limits_enabled=os.getenv("ADMISSION_LIMITS_ENABLED", "true").lower() == "true",
             inbound_owner_rpm=int(os.getenv("INBOUND_OWNER_RPM", "120")),
             inbound_global_rpm=int(os.getenv("INBOUND_GLOBAL_RPM", "600")),
             max_sessions_per_owner=int(os.getenv("MAX_SESSIONS_PER_OWNER", "100")),
@@ -186,11 +204,11 @@ class Settings:
             "degraded_mode_enabled": self.llm_allow_degraded,
             "maps_provider": "fixture" if offline else self.maps_provider,
             "booking_provider": "sandbox", "gemini_rpm": self.gemini_rpm,
-            "capabilities": {"asap": True, "scheduled": False, "multi_stop": False,
-                "inquiry_v2": True, "address_auto_accept_v2": True, "local_address_v2": True,
-                "location_confirmation": self.location_confirmation_enabled,
+            "capabilities": {"asap": True, "scheduled": True, "multi_stop": True,
+                "inquiry_v2": True, "address_auto_accept_v2": False, "local_address_v2": True,
+                "location_confirmation": True,
                 "area_estimate": bool(self.service_area_path) or offline,
-                "area_assistance": self.area_assistance_enabled and bool(self.assistance_policy_path),
+                "area_assistance": False,
                 "text_only_chat": True,
-                "electric_motorbike": False, "weather": self.weather_provider != "disabled"},
+                "motorbike": True, "electric_motorbike": False, "weather": self.weather_provider != "disabled"},
         }

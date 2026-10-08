@@ -10,7 +10,8 @@ OUTPUT = ROOT / "deploy/parrotgo-vps.tar.gz"
 FILES = (
     "Dockerfile", ".dockerignore", ".gitignore", ".gitattributes",
     ".github/workflows/package.yml",
-    "src/backend/requirements.runtime.lock", "src/backend/pyproject.toml",
+    "src/backend/requirements.runtime.lock", "src/backend/requirements.voice.lock",
+    "src/backend/pyproject.toml", "VOICE_SETUP.md", "deploy/VOICE_VPS.md",
     "src/backend/uv.lock", "src/frontend/package.json", "src/frontend/package-lock.json",
     "src/frontend/index.html", "src/frontend/tsconfig.json", "src/frontend/vite.config.ts",
     "deploy/compose.yaml", "deploy/Caddyfile", "deploy/.env.example",

@@ -1,4 +1,5 @@
 # Shell scripts must stay executable by bash after a Windows checkout.
 *.sh text eol=lf
+*.bat text eol=crlf
 Dockerfile text eol=lf
 deploy/Caddyfile text eol=lf

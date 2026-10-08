@@ -22,6 +22,7 @@ SlotName = Literal[
     "payment_method",
     "stops",
     "special_requests",
+    "general_note",
 ]
 IntentName = Literal[
     "provide_info",
@@ -36,9 +37,16 @@ IntentName = Literal[
     "chit_chat",
     "out_of_scope",
     "no_understanding",
+    "repeat_request",
+    "unclear",
 ]
 SpeechStatus = Literal["clear", "low_confidence", "no_speech", "noise"]
 BookingStatus = Literal[
+    "collecting",
+    "confirming",
+    "ready_to_book",
+    "canceled",
+    "operator_required",
     "collecting_info",
     "awaiting_confirmation",
     "booking_in_progress",
@@ -72,6 +80,11 @@ BotAction = Literal[
     "handoff",
     "goodbye",
     "silent",
+    "confirm_slots",
+    "clarify_address",
+    "general_reply",
+    "confirm_cancel",
+    "human_handoff",
 ]
 CandidateTarget = Literal["pickup", "destination", "stops"]
 LuggageSize = Literal["none", "cabin", "large", "mixed", "unknown"]

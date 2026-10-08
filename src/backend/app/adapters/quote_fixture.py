@@ -1,4 +1,7 @@
-"""Versioned sandbox tariff. The fare never purports to be a taxi company quote."""
+"""Archived V1–V3 sandbox quote adapter for compatibility tests.
+
+Current runtime uses KnowledgeBase per-kilometre rates and never a trip total.
+"""
 
 from __future__ import annotations
 

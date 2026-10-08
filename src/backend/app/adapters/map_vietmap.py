@@ -64,6 +64,7 @@ class VietMapAdapter:
         traffic_enabled: bool = True,
         traffic_ttl_seconds: int = 60,
         route_ttl_seconds: int = 120,
+        voice_top_two: bool = False,
     ) -> None:
         from app.domain.local_aliases import LocalAliasRegistry
         self.aliases = LocalAliasRegistry(alias_path)
@@ -75,6 +76,7 @@ class VietMapAdapter:
             raise ValueError("VIETMAP_API_VERSION must be v3 or v4")
         self._api_key = api_key
         self.api_version = api_version
+        self.voice_top_two = voice_top_two
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False)
         self._owns_client = client is None
         self.timeout_seconds = timeout_seconds
@@ -275,6 +277,9 @@ class VietMapAdapter:
                 rows = self._rows(await self._get(f"autocomplete/{self.api_version}", params))
             if not rows:
                 return resolution("not_found", query, target, reason="NO_MATCH", context=context, ttl=30)
+            # Preserve VietMap order; never substitute result 3+ in voice mode.
+            if self.voice_top_two:
+                rows = rows[:2]
             from app.domain.location_policy import area_resolution, provider_area_kind
             broad_rows = [row for row in rows if provider_area_kind(row)]
             area_matches = [row for row in broad_rows if self._suggestion_relevant(query, row)]
@@ -294,6 +299,9 @@ class VietMapAdapter:
             entrance_selection_required = False
             expanded = []
             for row in rows:
+                if self.voice_top_two:
+                    expanded.append(row)
+                    continue
                 entrances = row.get("entry_points") or []
                 if entrances:
                     if not isinstance(entrances, list):
@@ -311,7 +319,7 @@ class VietMapAdapter:
                                          "_needs_entrance_selection":not specific})
                 else:
                     expanded.append(row)
-            rows = expanded
+            rows = expanded[:2] if self.voice_top_two else expanded
             # Deduplicate exact identities, never nearby coordinates.
             rows = list({row.get("ref_id"):row for row in rows}.values())
             relevant_rows = [row for row in rows if self._suggestion_relevant(query, row)]
@@ -320,8 +328,8 @@ class VietMapAdapter:
             # Nearby number/suffix suggestions remain competitors until their
             # full address detail has been inspected; do not discard them from
             # display text alone. Retain the legacy bounded address budget.
-            rows = rows if house_query else relevant_rows or rows
-            detail_budget = 3 if house_query else 6
+            rows = rows if house_query or self.voice_top_two else relevant_rows or rows
+            detail_budget = 2 if self.voice_top_two else (3 if house_query else 6)
             entrance_selection_required = any(row.get("_needs_entrance_selection") for row in rows)
             candidates: list[dict[str, Any]] = []
             areas = []
@@ -332,7 +340,7 @@ class VietMapAdapter:
                 detail = await self._get(f"place/{self.api_version}", [("refid", ref_id)])
                 if not isinstance(detail, dict):
                     raise MapProviderError("PROVIDER_INVALID_RESPONSE")
-                if self._matches(query, row, detail):
+                if self.voice_top_two or self._matches(query, row, detail):
                     kind = provider_area_kind(detail)
                     if kind:
                         areas.append(await self._provider_area(row, detail=detail))
@@ -371,9 +379,9 @@ class VietMapAdapter:
             destination_place = Place.model_validate(destination)
         except ValidationError:
             raise MapProviderError("INVALID_ROUTE_POINTS") from None
-        if vehicle_type not in {None, "oto_4_cho", "oto_7_cho", "xe_may_dien"}:
+        if vehicle_type not in {None, "xe_may", "oto_4_cho", "oto_7_cho", "xe_may_dien"}:
             raise MapProviderError("UNSUPPORTED_VEHICLE_PROFILE")
-        profile = "motorcycle" if vehicle_type == "xe_may_dien" else "car"
+        profile = "motorcycle" if vehicle_type in {"xe_may", "xe_may_dien"} else "car"
         if departure_time is not None and (not isinstance(departure_time, datetime) or not departure_time.tzinfo):
             raise MapProviderError("INVALID_DEPARTURE_TIME")
         requested_traffic = include_traffic and self.traffic_enabled

@@ -1,6 +1,6 @@
 # Đóng gói VPS bằng GitHub Actions
 
-Workflow build Docker image trên GitHub, chạy smoke test với dữ liệu mẫu, rồi xuất gói tải về. VPS chỉ cần Docker Engine và Compose để nạp image; không phải tự build frontend/backend. Workflow không SSH vào VPS và không đẩy image lên registry.
+Workflow kiểm thử backend và trình duyệt, build image chứa frontend/API/LiveKit agent/Azure Speech, kiểm tra native runtime rồi chạy smoke test với dữ liệu mẫu. Sau khi các bước thành công, workflow đẩy image lên GHCR và xuất gói tải về. VPS chỉ cần Docker Engine và Compose để nạp/chạy image. Workflow không SSH vào VPS.
 
 ## 1. Đưa đúng cấu trúc lên repository
 
@@ -18,7 +18,7 @@ deploy/
 
 Giữ cả lockfile và cấu hình được theo dõi trong Git. `.env`, dữ liệu SQLite, backup, `node_modules` và archive đã tạo không được commit. Các khóa Groq/Gemini/VietMap và thông tin SSH không cần đưa vào GitHub Secrets: chúng chỉ nằm trong `deploy/.env` trên VPS.
 
-Workspace hiện có xung đột merge `README.md` ở thư mục gốc. Cần tự chọn nội dung đúng và hoàn tất xử lý conflict trước khi commit/push; hướng dẫn này không sửa file đó hoặc thư mục `P-016/`.
+Hướng dẫn dùng GHCR, cấu hình voice và thay API key trên VPS: [VOICE_VPS.md](VOICE_VPS.md). Tag GHCR có dạng `ghcr.io/<owner>/<repo>:<commit>-amd64` hoặc `-arm64`; `latest-amd64`/`latest-arm64` chỉ cập nhật trên default branch.
 
 ## 2. Chạy và tải artifact
 
@@ -60,7 +60,7 @@ sudo nano deploy/.env
 sudo bash deploy/setup.sh --start --image
 ```
 
-`docker load` nạp cả image và tag từ gzip archive. [Tài liệu Docker](https://docs.docker.com/reference/cli/docker/image/load/). `--image` dùng image đã nạp, bỏ qua build trên VPS. Điền domain/email, tài khoản beta và API keys riêng trong editor; giữ `APP_SECRET` và bcrypt hash do setup sinh. Có thể dùng `APP_PROFILE=fixture_demo` để thử trước khi điền khóa thật.
+`docker load` nạp cả image và tag từ gzip archive. [Tài liệu Docker](https://docs.docker.com/reference/cli/docker/image/load/). `--image` dùng image đã nạp, bỏ qua build trên VPS. Điền domain/email, tài khoản beta và API keys riêng trong editor; giữ `APP_SECRET` và bcrypt hash do setup sinh. Voice cần LiveKit/Azure keys theo [VOICE_VPS.md](VOICE_VPS.md). Có thể dùng `APP_PROFILE=fixture_demo` và `VOICE_ENABLED=false` để thử offline.
 
 Khi cập nhật VPS đang chạy, thực hiện `sudo bash deploy/backup.sh` và giữ image cũ **trước** khi nạp image mới. Giữ `deploy/.env` hiện có; dữ liệu nằm trong named volume, không dùng `docker compose down -v`. Xem [hướng dẫn VPS](README.md) để cài Docker, cấu hình DNS/HTTPS, kiểm tra Basic Auth và backup/restore.
 

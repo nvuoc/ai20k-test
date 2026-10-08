@@ -5,13 +5,15 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from app.adapters.booking_sandbox import SandboxBookingProvider
+from app.adapters.crm_sqlite import SQLiteCRM
 from app.adapters.extraction_router import ExtractionRouter, ProviderAttempt
 from app.adapters.extractor import CallBudget, ExtractorRuntime, llm_extractor_func
+from app.adapters.knowledge_base import KnowledgeBase
 from app.adapters.map_fixture import FixtureMapAdapter
 from app.adapters.nlu_fixture import FixtureExtractorClient
-from app.adapters.quote_fixture import QuoteAdapter
 from app.config import Settings
-from app.domain.conversation import ConversationEngine
+from app.domain.booking_engine import ConversationEngine
+from app.domain.mega_poi import MegaPOIRegistry
 from app.graph.builder import DurableGraph
 
 
@@ -21,6 +23,7 @@ async def conversation_runtime(settings: Settings):
     clients = []
     sandbox = None
     router = None
+    crm = None
     try:
         if offline:
             client = FixtureExtractorClient()
@@ -71,6 +74,7 @@ async def conversation_runtime(settings: Settings):
 
                 maps = VietMapAdapter(
                     api_key=settings.vietmap_key,
+                    voice_top_two=settings.voice_enabled,
                     timeout_seconds=settings.read_timeout,
                     alias_path=settings.local_alias_path,
                     service_area_path=settings.service_area_path,
@@ -114,25 +118,20 @@ async def conversation_runtime(settings: Settings):
             return await llm_extractor_func(projection, runtime=runtime)
 
         sandbox = SandboxBookingProvider(settings.database_path)
+        crm = SQLiteCRM(settings.database_path)
         engine = ConversationEngine(
             extractor=extractor,
             maps=maps,
             booking=sandbox,
-            quote=QuoteAdapter(
-                ttl_seconds=settings.quote_ttl,
-                catalog_path=settings.vehicle_catalog_path,
-                pricing_path=settings.pricing_path,
-            ),
-            quote_ttl_seconds=settings.quote_ttl,
+            crm=crm,
+            mega_pois=MegaPOIRegistry(settings.mega_poi_path),
+            kb=KnowledgeBase(settings.knowledge_base_path),
             weather=weather,
             brand_name=settings.brand_name,
             inquiry_ttl=settings.inquiry_ttl,
             read_deadline=settings.read_deadline,
-            location_confirmation=settings.location_confirmation_enabled,
-            assistance_policy_path=settings.assistance_policy_path,
-            area_assistance_enabled=settings.area_assistance_enabled,
-            service_area_path=settings.service_area_path,
         )
+        engine.voice_mode = settings.voice_enabled
         async with DurableGraph(engine, settings.checkpoint_path) as graph:
             yield engine, graph
     finally:
@@ -142,3 +141,5 @@ async def conversation_runtime(settings: Settings):
                 await close()
         if sandbox is not None:
             sandbox.close()
+        if crm is not None:
+            crm.close()

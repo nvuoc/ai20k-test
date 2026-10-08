@@ -16,11 +16,13 @@ if errorlevel 1 (
 )
 
 echo [1/6] Installing backend dependencies...
-uv sync --project src/backend --extra dev --locked --cache-dir .cache/uv
+uv sync --project src/backend --extra dev --extra voice --locked --cache-dir .cache/uv
 if errorlevel 1 goto :failed
 
 echo [2/6] Initializing environment...
 src\backend\.venv\Scripts\python.exe src/scripts/init_env.py
+if errorlevel 1 goto :failed
+src\backend\.venv\Scripts\python.exe src/scripts/init_voice_env.py
 if errorlevel 1 goto :failed
 
 echo [3/6] Installing frontend dependencies...

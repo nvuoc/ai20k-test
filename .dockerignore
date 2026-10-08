@@ -5,6 +5,7 @@
 !src/
 !src/backend/
 !src/backend/requirements.runtime.lock
+!src/backend/requirements.voice.lock
 !src/backend/app/
 !src/backend/app/**
 !src/frontend/

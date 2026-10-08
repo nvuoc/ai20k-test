@@ -14,7 +14,8 @@ from app.adapters.nlu_fixture import FixtureExtractorClient
 from app.adapters.quote_fixture import QuoteAdapter
 from app.adapters.turn_fixture import extract_turn_fixture
 from app.config import Settings
-from app.domain.conversation import ConversationEngine, new_conversation_state
+from app.domain.conversation import LegacyConversationEngine as ConversationEngine
+from app.domain.conversation import new_conversation_state
 from app.domain.location_confirmation import fee_reply_matches, upgrade_state
 from app.graph.builder import DurableGraph
 from app.main import create_app
@@ -331,7 +332,7 @@ def test_v3_http_transcript_uses_text_for_location_and_booking(tmp_path):
         assert client.get("/api/bootstrap").json()["capabilities"]["text_only_chat"]
         state = create_session(client, "v3")
         session = state["session_id"]
-        for text in (COMPLETE, "đúng", "đúng", "đồng ý đặt xe"):
+        for text in (COMPLETE, "đúng", "đúng", "đúng", "đồng ý đặt xe"):
             response = state["active_response"]
             state, _ = send_text(
                 client,
@@ -556,7 +557,7 @@ def test_disabling_assistance_offers_actionable_fixed_point_and_clears_fee(runti
 @pytest.mark.parametrize(
     "code", ["PROVIDER_AUTH_ERROR", "PROVIDER_MODEL_UNAVAILABLE", "PROVIDER_CONFIG_ERROR"]
 )
-def test_provider_configuration_failure_reaches_worker_not_rewrite_prompt(runtime, code):
+def test_provider_configuration_failure_preserves_chat_and_reports_configuration(runtime, code):
     engine, _ = runtime
 
     async def broken(data):
@@ -564,15 +565,14 @@ def test_provider_configuration_failure_reaches_worker_not_rewrite_prompt(runtim
 
     async def run():
         engine.extractor = broken
-        with pytest.raises(ExtractorError, match="provider configuration"):
-            await engine.interpret(
-                engine.new_state("config"),
-                {
-                    "event_id": "config-input",
-                    "text": "Đặt xe giúp tôi",
-                    "occurred_at": engine.clock(),
-                },
-            )
+        state = engine.new_state("config")
+        event = {"event_id": "config-input", "text": "Đặt xe giúp tôi", "occurred_at": engine.clock()}
+        interpretation = await engine.interpret(state, event)
+        assert interpretation["kind"] == "error" and interpretation["code"] == code
+        updated = await engine.prepare(state, event, interpretation)
+        assert updated["booking_state"] == state["booking_state"]
+        assert "lỗi cấu hình" in updated["last_response"]["text"]
+        assert updated["last_response"]["reason"] == code
 
     asyncio.run(run())
 

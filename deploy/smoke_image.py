@@ -62,6 +62,7 @@ def main() -> None:
             "--env", "APP_PROFILE=fixture_demo",
             "--env", "APP_SECRET=ci-fixture-signing-secret-only-not-for-production",
             "--env", "COOKIE_SECURE=false",
+            "--env", "VOICE_ENABLED=false",
             "--env", "LOCATION_CONFIRMATION_ENABLED=true",
             "--env", "WEATHER_PROVIDER=disabled", "parrotgo:local",
         )
@@ -73,7 +74,10 @@ def main() -> None:
         assert request("/assets/" + asset), "Frontend JavaScript is missing"
         config = request("/api/bootstrap")
         assert config["profile"] == "fixture_demo" and config["booking_provider"] == "sandbox"
-        session = request("/api/sessions", {"client_session_key": "ci-" + suffix})
+        session = request("/api/sessions", {
+            "client_session_key": "ci-" + suffix,
+            "customer_name": "CI fixture", "customer_phone": "0901234567",
+        })
         path = "/api/sessions/" + session["session_id"]
         welcome_id = session["active_response"]["response_id"]
         message = {"client_message_id": "ci-greeting", "text": "xin chào"}

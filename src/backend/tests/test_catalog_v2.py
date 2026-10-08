@@ -11,7 +11,7 @@ from app.adapters.booking_sandbox import SandboxBookingProvider
 from app.adapters.map_fixture import FixtureMapAdapter
 from app.adapters.quote_fixture import FIXTURE_DIR, QuoteAdapter
 from app.adapters.turn_fixture import extract_turn_fixture
-from app.domain.conversation import ConversationEngine
+from app.domain.conversation import LegacyConversationEngine as ConversationEngine
 
 
 @pytest.fixture

@@ -118,6 +118,7 @@ class BookingState(StrictContract):
     payment_method: SlotState[SlotString]
     stops: SlotState[StringList]
     special_requests: SlotState[StringList]
+    general_note: SlotState[SlotString] = Field(default_factory=lambda: SlotState(value=None, confirmed=False))
 
     @model_validator(mode="after")
     def validate_request_set(self) -> BookingState:
@@ -227,6 +228,10 @@ class DialogueAct(StrictContract):
         if self.intent in {"confirm", "deny"}:
             if self.value is not None:
                 raise ValueError("confirm/deny must have null value")
+            return self
+        if self.intent in {"request_repeat", "repeat_request"}:
+            if self.value is not None:
+                raise ValueError("repeat requests must have null value")
             return self
 
         if self.intent in {"select_candidate", "reject_candidate"}:

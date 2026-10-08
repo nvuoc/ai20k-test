@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { api, type Bootstrap, type Event, type MessageInput, type Snapshot } from './api'
+import VoiceCall from './VoiceCall'
 
 const uid = () => crypto.randomUUID()
 export default function App() {
@@ -9,6 +10,8 @@ export default function App() {
   const [input, setInput] = useState('')
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
   const [retry, setRetry] = useState<{ path: string; body: unknown; text?: string }>()
   const session = useRef('')
   const cursor = useRef(0)
@@ -29,7 +32,7 @@ export default function App() {
     cursor.current = Math.max(cursor.current, next.next_cursor)
   }, [])
 
-  const start = useCallback(async (fresh = false) => {
+  const start = useCallback(async (fresh = false, customer?: { customer_name: string; customer_phone: string }) => {
     setError('')
     const bootstrap = await api<Bootstrap>('/bootstrap')
     setConfig(bootstrap)
@@ -37,14 +40,21 @@ export default function App() {
     if (saved) {
       try {
         const next = await api<Snapshot>(`/sessions/${saved}`)
-        session.current = saved
-        merge(next)
-        return
+        if (next.architecture_version === 'architecture-fixed-1') {
+          session.current = saved
+          setCustomerName(next.customer_name || '')
+          setCustomerPhone(next.customer_phone || '')
+          merge(next)
+          return
+        }
+        localStorage.removeItem('di-cung-session')
+        localStorage.removeItem('di-cung-session-key')
       } catch { localStorage.removeItem('di-cung-session') }
     }
+    if (!customer) return
     let key = fresh ? uid() : localStorage.getItem('di-cung-session-key') || uid()
     localStorage.setItem('di-cung-session-key', key)
-    const next = await api<Snapshot>('/sessions', { client_session_key: key })
+    const next = await api<Snapshot>('/sessions', { client_session_key: key, ...customer })
     session.current = next.session_id
     localStorage.setItem('di-cung-session', next.session_id)
     merge(next)
@@ -100,6 +110,7 @@ export default function App() {
 
   useEffect(() => {
     // Polls still retry failed delivery acknowledgements even without new events.
+    if (config?.capabilities.voice_booking) return
     for (const event of events) {
       if (event.type !== 'assistant_response') continue
       const response = event.payload
@@ -112,7 +123,7 @@ export default function App() {
         generation: response.generation, delivery_type: 'rendered',
       }).catch(() => acked.current.delete(response.response_id))
     }
-  }, [events, snapshot])
+  }, [events, snapshot, config])
 
   async function transmit(path: string, body: unknown, text?: string) {
     setSending(true); setError('')
@@ -139,6 +150,8 @@ export default function App() {
   async function fresh() {
     if (sending || snapshot?.pending_count) return
     session.current = ''; cursor.current = 0
+    localStorage.removeItem('di-cung-session')
+    localStorage.removeItem('di-cung-session-key')
     followingLatest.current = true
     acked.current.clear(); rendered.current.clear(); setEvents([]); setSnapshot(undefined)
     setRetry(undefined)
@@ -150,17 +163,28 @@ export default function App() {
       <a className="brand" href="/"><span className="brand-mark">P</span><span>{config?.brand_name || 'ParrotGo'}<small>CHUYẾN ĐI BẮT ĐẦU TỪ MỘT CÂU</small></span></a>
       <div className="intro"><span className="eyebrow">TRỢ LÝ ĐẶT XE</span><h1>Bạn muốn<br />đi đâu hôm nay?</h1><p>Nói điểm đón, điểm đến và nhu cầu của bạn. Mình sẽ giúp bạn hoàn thiện chuyến đi.</p></div>
       <div className="steps"><div><b>01</b><span>Kể về chuyến đi</span></div><div><b>02</b><span>Kiểm tra địa điểm & giá</span></div><div><b>03</b><span>Xác nhận khi sẵn sàng</span></div></div>
-      <div className="sandbox-note"><span>CHẾ ĐỘ THỬ NGHIỆM</span><p>Giá và đơn đặt xe là sandbox. Không thu tiền, chưa điều phối tài xế thật.</p></div>
+      <div className="sandbox-note"><span>CHẾ ĐỘ THỬ NGHIỆM</span><p>Bot báo giá/km. Tiền cuối cùng tính theo đồng hồ và quãng đường thực tế. Chưa điều phối tài xế thật.</p></div>
       <div className="sidebar-foot">Một cuộc trò chuyện. Một chuyến đi rõ ràng.</div>
     </aside>
     <main className="chat-panel">
       <header className="chat-header"><div><span className="assistant-avatar">P</span><div><strong>Trợ lý {config?.brand_name || 'ParrotGo'}</strong><small><i />{config?.llm_provider === 'fixture' ? 'Demo offline' : 'Sẵn sàng hỗ trợ'}</small></div></div><button className="new-trip" onClick={() => void fresh()} disabled={sending || !!snapshot?.pending_count}>+ Chuyến mới</button></header>
-      <div className="mode-bar"><span>ĐẶT XE THỬ NGHIỆM</span><p>{config?.maps_provider === 'vietmap' ? 'Địa điểm qua VietMap' : 'Địa điểm mẫu Hà Nội & TP.HCM'} · Trả lời bằng tin nhắn</p></div>
+      <div className="mode-bar"><span>ĐẶT XE THỬ NGHIỆM</span><p>{config?.maps_provider === 'vietmap' ? 'Địa điểm qua VietMap' : 'Địa điểm mẫu Hà Nội & TP.HCM'} · {config?.capabilities.voice_booking ? 'Trò chuyện bằng giọng nói' : 'Trả lời bằng tin nhắn'}</p></div>
       <section className="conversation" ref={conversation} aria-label="Hội thoại đặt xe" aria-live="polite" onScroll={event => {
         const element = event.currentTarget
         followingLatest.current = element.scrollHeight - element.clientHeight - element.scrollTop <= 48
       }}>
         <div className="conversation-content" ref={conversationContent}>
+          {!snapshot && <form className="session-profile" onSubmit={event => {
+            event.preventDefault()
+            setSending(true)
+            void start(false, { customer_name: customerName.trim(), customer_phone: customerPhone.trim() })
+              .catch(e => setError(e.message)).finally(() => setSending(false))
+          }}>
+            <h2>{config?.capabilities.voice_booking ? 'Nhập tên và số điện thoại để nói chuyện' : 'Bắt đầu phiên đặt xe'}</h2>
+            <label>Tên khách hàng<input aria-label="Tên khách hàng" autoComplete="name" required maxLength={128} value={customerName} onChange={event => setCustomerName(event.target.value)} /></label>
+            <label>Số điện thoại<input aria-label="Số điện thoại" type="tel" autoComplete="tel" required value={customerPhone} onChange={event => setCustomerPhone(event.target.value)} /></label>
+            <button disabled={sending || !customerName.trim() || !customerPhone.trim()}>{config?.capabilities.voice_booking ? 'Bắt đầu nói chuyện' : 'Bắt đầu'}</button>
+          </form>}
           <div className="day-label">HÔM NAY</div>
           {events.map(event => {
             if (event.type === 'booking_updated') return null
@@ -181,8 +205,10 @@ export default function App() {
         {!!snapshot?.pending_count && <div className="working" role="status"><span /><span /><span /><p>{snapshot.waiting_for_quota ? 'Yêu cầu đã lưu, đang chờ đến lượt xử lý. Bạn không cần gửi lại.' : 'Đang xử lý yêu cầu của bạn…'}</p></div>}
         {snapshot?.needs_support && <div className="error" role="alert">Phiên cần được kiểm tra. Hệ thống đã dừng thử lại tự động; kết quả giao dịch chưa rõ vẫn được lưu để đối soát.</div>}
         {error && <div className="error" role="alert">{error}{retry ? <button disabled={sending} onClick={() => void transmit(retry.path, retry.body, retry.text)}>Gửi lại</button> : <button onClick={() => void start().catch(e => setError(e.message))}>Kết nối lại</button>}</div>}
-        <div className="composer"><textarea aria-label="Tin nhắn đặt xe" placeholder="Ví dụ: Đón tôi ở Nhà hát Lớn, đến Ga Hà Nội…" value={input} maxLength={2000} rows={2} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() } }} /><button aria-label="Gửi tin nhắn" disabled={sending || !input.trim() || !snapshot || snapshot.needs_support} onClick={send}>↑</button></div>
-        <div className="composer-hint"><span>Enter để gửi · Shift + Enter để xuống dòng</span><span>{input.length}/2000</span></div>
+        {config?.capabilities.voice_booking ? (snapshot && !snapshot.needs_support && <VoiceCall key={snapshot.session_id} sessionId={snapshot.session_id} />) : <>
+          <div className="composer"><textarea aria-label="Tin nhắn đặt xe" placeholder="Ví dụ: Đón tôi ở Nhà hát Lớn, đến Ga Hà Nội…" value={input} maxLength={2000} rows={2} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() } }} /><button aria-label="Gửi tin nhắn" disabled={sending || !input.trim() || !snapshot || snapshot.needs_support} onClick={send}>↑</button></div>
+          <div className="composer-hint"><span>Enter để gửi · Shift + Enter để xuống dòng</span><span>{input.length}/2000</span></div>
+        </>}
       </footer>
     </main>
   </div>

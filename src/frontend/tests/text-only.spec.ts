@@ -24,6 +24,7 @@ const response: Response = {
 }
 
 async function mockTextChat(page: Page, failFirstMessage = false) {
+  await page.addInitScript(() => localStorage.setItem('di-cung-session', 'text-session'))
   await page.route('https://fonts.googleapis.com/**', route => route.abort())
   const bootstrap: Bootstrap = {
     api_version: 'chat-api-2', mode: 'sandbox', profile: 'test', llm_provider: 'groq',
@@ -36,7 +37,7 @@ async function mockTextChat(page: Page, failFirstMessage = false) {
     type: 'assistant_response', payload: response,
   }]
   const state: Snapshot = {
-    api_version: 'chat-api-2', session_id: 'text-session', events: history,
+    api_version: 'chat-api-3', architecture_version: 'architecture-fixed-1', customer_name: 'An', customer_phone: '0901234567', session_id: 'text-session', events: history,
     next_cursor: 1, current_cursor: 1, has_more: false, pending_count: 0,
     booking_status: 'collecting_info', draft_id: 'text-draft', active_response: response,
     booking: response.booking,

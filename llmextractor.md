@@ -1,3 +1,5 @@
+> Tài liệu V1–V3 lịch sử. Kiến trúc đang thực thi được chốt tại [architecture_fixed.md](architecture_fixed.md), đối chiếu triển khai tại [ARCHITECTURE_IMPLEMENTATION.md](ARCHITECTURE_IMPLEMENTATION.md).
+
 # Extractor và hợp đồng diễn giải ParrotGo V2
 
 Cập nhật: 02/10/2026. Tài liệu mô tả `llm_extractor_func` và contract đang thực thi; liên quan [langgraph.md](langgraph.md), [map.md](map.md), [llmplanner.md](llmplanner.md) và [MVP_PLAN.md](MVP_PLAN.md). Kết quả kiểm chứng ở [MVP_STATUS.md](MVP_STATUS.md).

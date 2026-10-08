@@ -1,0 +1,15 @@
+{
+  "architecture_version": "architecture-fixed-1",
+  "state_schema_version": 7,
+  "checked_date": "2026-10-06",
+  "kind": "offline-development-verification",
+  "backend": {"passed": 707, "failed": 0, "errors": 0, "skipped": 0, "architecture_acceptance_cases": 34},
+  "final_focused_backend": {"passed": 116, "failed": 0, "scope": "canonical architecture, API and scheduled pickup after final terminal/migration changes"},
+  "browser_e2e": {"passed": 15, "failed": 0},
+  "checks": {"ruff": "passed", "typescript_vite_build": "passed", "generated_openapi_types": "current", "offline_text_example": "passed", "git_diff_whitespace": "passed"},
+  "runtime_entrypoints": ["HTTP", "app.text.main", "app.text.main_async", "TextBot", "CLI"],
+  "booking_provider": "sandbox",
+  "live_services_tested_in_this_change": false,
+  "historical_regression_engine": "LegacyConversationEngine; not selected in current runtime",
+  "limits": ["No real driver dispatch", "operator_required persists a support request state without sending staff notifications", "Packaged KB and POI defaults are sandbox data", "Route proximity uses sourced detour comparisons, not exact route geometry", "Development tests are not independent Vietnamese NLU holdout evaluation"]
+}

@@ -7,10 +7,15 @@ import re
 from app.adapters.nlu_fixture import _fold, extract_fixture
 from app.contracts.nlu import NluInput
 from app.contracts.turn import TurnInput, TurnResult
+from app.domain.pickup_time import time_expression
 
 QUESTION_PATTERNS = {
+    "static_faq": r"(?:hanh ly|thu cung|cong kenh|ghe tre em|hut thuoc).*\b(?:khong|duoc|quy dinh|chinh sach|bao nhieu)\b",
+    "session_question": r"(?:da chon xe|chon xe gi|dat di dau|nay toi dat|doc lai|nhac lai)",
+    "route_membership": r"(?:tren|gan) (?:lo trinh|tuyen duong)|co (?:di |nam )?qua",
     "identity": r"ban la ai|ban ten gi|parrotgo|co phai tai xe|ban co phai tai xe",
     "vehicle_catalog": r"co (?:nhung )?(?:loai )?xe (?:gi|nao)|nhung loai xe|cac loai xe",
+    "place_location": r"\b(?:o|tai) (?:dau|cho nao|vi tri nao)\b|\bthuoc (?:tinh|thanh pho|quan|huyen) nao\b|\bdia chi .+ (?:la gi|the nao)\b|^(?:dia chi|(?:cho (?:toi|minh|em) biet|toi (?:muon|can) biet) dia chi)\b",
     "weather_forecast": r"thoi tiet|co mua|troi mua|co nong|nhiet do|du bao|khong mua",
     "route_distance": r"\b(?:km|kilomet|met|khoang cach|co xa|bao xa)\b",
     "pickup_availability": r"xe (?:toi|den) don|tai xe|bao gio (?:co xe|don)|don (?:nhanh|ngay).*khong|khi nao.*don",
@@ -64,6 +69,7 @@ def _parameters(text: str) -> dict:
             code
             for pattern, code in (
                 (r"xe may dien", "xe_may_dien"),
+                (r"xe may", "xe_may"),
                 (r"7 cho", "oto_7_cho"),
                 (r"4 cho", "oto_4_cho"),
             )
@@ -71,11 +77,7 @@ def _parameters(text: str) -> dict:
         ),
         None,
     )
-    time_match = re.search(
-        r"(?:(?:ngay mai|mai|hom nay|toi nay|sang mai|chieu mai)\s*(?:luc\s*)?)?\d{1,2}(?::\d{2}|\s*gio(?:\s*\d{1,2})?)(?:\s*(?:sang|chieu|toi|trua))?",
-        folded,
-    )
-    when = text[time_match.start() : time_match.end()] if time_match else None
+    when = time_expression(text)
     if not when:
         when = next(
             (
@@ -113,6 +115,37 @@ def _parameters(text: str) -> dict:
         departure_time_ref=when,
         route_scope=scope,
         weather_target=target,
+    )
+
+
+def _place_parameters(text: str) -> dict:
+    folded = _fold(text)
+    prefix = re.match(
+        r"(?:xin hoi|cho (?:toi|minh|em) hoi|cho hoi|ban (?:co )?biet|"
+        r"toi (?:muon|can) biet|cho (?:toi|minh|em) biet)\s+", folded,
+    )
+    start = prefix.end() if prefix else 0
+    body = folded[start:]
+    ending = r"(?:\s+(?:khong|nhi|nhe|a|vay|the))*[ .!?]*$"
+    patterns = (
+        r"(?:dia chi(?:\s+cua)?\s+)?(.+?)(?:\s+(?:la|thi))?"
+        r"(?:\s+(?:nam|toa lac))?\s+(?:o|tai)\s+(?:dau|cho nao|vi tri nao)" + ending,
+        r"dia chi(?:\s+cua)?\s+(.+?)(?:\s+la\s+gi|\s+the nao)?" + ending,
+        r"(.+?)\s+thuoc\s+(?:tinh|thanh pho|quan|huyen)\s+nao" + ending,
+    )
+    match = next((m for pattern in patterns if (m := re.fullmatch(pattern, body))), None)
+    query = text[start + match.start(1):start + match.end(1)].strip(" ,.!?") if match else None
+    key = _fold(query or "")
+    booking_ref = bool(re.search(r"\b(?:diem|noi) (?:don|den)\b", key))
+    if booking_ref or key in {"dia diem nay", "dia diem do", "dia danh nay", "dia danh do", "cho nay", "cho do", "do"}:
+        query = None
+    return dict(
+        origin=query,
+        destination=None,
+        vehicle_ref=None,
+        departure_time_ref=None,
+        route_scope="explicit_pair" if query else "current_booking" if booking_ref else "unresolved",
+        weather_target=None,
     )
 
 
@@ -192,7 +225,9 @@ def extract_turn_fixture(data: TurnInput) -> TurnResult:
             )
             inquiry_action("update", prompt.field, value)
     else:
-        for match in re.finditer(r"[^,;\n]+", text):
+        place_query = _place_parameters(text)["origin"] if question_types(text) == ["place_location"] and not explicit_booking else None
+        clause_pattern = r"[^;\n]+" if place_query and not question_types(place_query) else r"[^,;\n]+"
+        for match in re.finditer(clause_pattern, text):
             raw = match.group().strip()
             if not raw:
                 continue
@@ -222,6 +257,7 @@ def extract_turn_fixture(data: TurnInput) -> TurnResult:
                             route_scope="explicit_pair",
                         )
                     for kind in kinds:
+                        question_parameters = _place_parameters(part) if kind == "place_location" else parameters
                         questions.append(
                             dict(
                                 question_id=f"q{len(questions) + 1}",
@@ -229,9 +265,9 @@ def extract_turn_fixture(data: TurnInput) -> TurnResult:
                                 raw_text=part,
                                 evidence_span=evidence,
                                 relation_to_booking="hypothetical"
-                                if parameters["route_scope"] == "explicit_pair"
+                                if question_parameters["route_scope"] == "explicit_pair" and kind != "place_location"
                                 else "read_only",
-                                **parameters,
+                                **question_parameters,
                             )
                         )
                 else:

@@ -16,6 +16,7 @@ function message(cursor: number): Event {
 }
 
 async function mockChat(page: Page, failFirstAck = false) {
+  await page.addInitScript(() => localStorage.setItem('di-cung-session', 'scroll-session'))
   await page.route('https://fonts.googleapis.com/**', route => route.abort())
   const bootstrap: Bootstrap = {
     api_version: 'chat-api-2', mode: 'sandbox', profile: 'test', llm_provider: 'fixture',
@@ -24,13 +25,13 @@ async function mockChat(page: Page, failFirstAck = false) {
   }
   const history = Array.from({ length: 24 }, (_, index) => message(index + 1))
   const state: Snapshot = {
-    api_version: 'chat-api-2', session_id: 'scroll-session', events: history,
+    api_version: 'chat-api-3', architecture_version: 'architecture-fixed-1', customer_name: 'An', customer_phone: '0901234567', session_id: 'scroll-session', events: history,
     next_cursor: history.length, current_cursor: history.length, has_more: false,
     pending_count: 0, booking_status: 'collecting_info', draft_id: 'scroll-draft',
     active_response: null, booking: null,
   }
   let polls = 0
-  let sessions = 0
+  let sessions = 1
   let latestAckAttempts = 0
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url())
@@ -137,6 +138,9 @@ for (const viewport of [
     await page.mouse.wheel(0, -600)
     await expect.poll(() => distanceFromBottom(conversation)).toBeGreaterThan(400)
     await page.getByRole('button', { name: '+ Chuyến mới' }).click()
+    await page.getByRole('textbox', { name: 'Tên khách hàng' }).fill('An')
+    await page.getByRole('textbox', { name: 'Số điện thoại' }).fill('0901234567')
+    await page.getByRole('button', { name: 'Bắt đầu', exact: true }).click()
     await expect(conversation.locator('.message')).toHaveCount(1)
     for (let i = 0; i < 24; i++) chat.append()
     await expect(conversation.locator('.message')).toHaveCount(25)

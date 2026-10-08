@@ -17,10 +17,12 @@ dependencies = [
   "langgraph>=1,<2",
   "langgraph-checkpoint-sqlite>=3.0.1,<4",
   "tzdata>=2025.1",
+  "livekit-api>=1,<2",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "ruff>=0.12,<1", "jsonschema>=4.23,<5"]
+voice = ["livekit-agents[azure,silero]>=1.8,<2"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

@@ -1,4 +1,7 @@
-"""Text booking engine: apply a complete turn before considering any transaction.
+"""Legacy V1–V3 reducer and reusable reference helpers.
+
+Current runtime uses domain.booking_engine.ConversationEngine. This reducer is
+retained for archived state compatibility and historical regression fixtures.
 
 The extractor supplies hypotheses, never permission to book. Revision, delivery,
 quote, capability and consent guards are independent of the language provider.
@@ -26,6 +29,12 @@ from app.contracts.nlu import (
     validate_candidate_references,
 )
 from app.contracts.registry import SLOT_NAMES
+from app.domain.pickup_time import (
+    ASAP,
+    merge_time_clarification,
+    parse_pickup_time,
+    time_expression,
+)
 
 CORE = ("destination", "pickup", "pickup_time", "passengers", "vehicle_type", "contact_phone")
 VEHICLE_LABELS = {"oto_4_cho": "Xe 4 chỗ", "oto_7_cho": "Xe 7 chỗ"}
@@ -36,7 +45,7 @@ VEHICLES = {
 QUESTIONS = {
     "pickup": "Bạn muốn đón ở đâu? Hãy ghi địa chỉ hoặc địa điểm kèm tỉnh/thành phố.",
     "destination": "Bạn muốn đến đâu? Hãy ghi địa chỉ hoặc địa điểm kèm tỉnh/thành phố.",
-    "pickup_time": "Bạn muốn đi ngay hay đặt trước? Bản thử nghiệm hiện hỗ trợ đi ngay; bạn hãy nói ‘đi ngay’ nếu phù hợp nhé.",
+    "pickup_time": "Bạn muốn đón ngay hay vào ngày và giờ nào? Ví dụ ‘ngày mai 08:00’ hoặc ‘30 phút nữa’.",
     "passengers": "Chuyến này có bao nhiêu người, tính cả trẻ em?",
     "vehicle_type": "Bạn chọn xe 4 chỗ hay xe 7 chỗ? Xe thử nghiệm chở tối đa 4 hoặc 6 khách.",
     "contact_phone": "Bạn cho mình số điện thoại để liên hệ với người đi nhé.",
@@ -136,13 +145,14 @@ class ChatEngine:
                       delivered_response_ids: list[str] | None = None,
                       reply_to_response_id: str | None = None, event_id: str | None = None,
                       ingress_guard: Any = None, interpretation: dict | NluResult | None = None,
-                      allow_dispatch: bool = True) -> dict:
+                      allow_dispatch: bool = True, occurred_at: float | None = None) -> dict:
         state = deepcopy(state)
         if event_id and state["control"].get("last_event_id") == event_id:
             return state
         acknowledge(state, delivered_response_ids)
         state["turn"] = {"event_id": event_id, "changed_slots": [], "issues": [],
-                         "questions": [], "confirmation_resolution": {}}
+                         "questions": [], "confirmation_resolution": {},
+                         "occurred_at": occurred_at if occurred_at is not None else self.clock()}
         await self._recover_committed(state)
         before = deepcopy(state)
         previous_prompt = before["confirmation"].get("pending_prompt")
@@ -216,6 +226,8 @@ class ChatEngine:
             intent, target, value = act["intent"], act["target"], act["value"]
             if intent in {"provide_info", "change_info"}:
                 if target not in semantic_block:
+                    if target == "pickup_time" and intent == "change_info":
+                        state["turn"]["reanchor_pickup_time"] = True
                     self._replace_slot(state, target, value, changed)
             elif intent == "select_candidate":
                 if self._select_candidate(state, target, value, action, before):
@@ -344,14 +356,20 @@ class ChatEngine:
         changes_by_target = {a["target"]: a["value"] for a in acts
                              if a["intent"] in {"provide_info", "change_info"}}
         hypothetical = "?" in lower or any(a["intent"] == "ask_question" for a in acts)
-        # Keep clear unsupported requests even if the extractor omitted the slot.
-        future = re.search(r"\b(ngay mai|sang mai|chieu mai|toi mai|dat truoc)\b", lower)
+        # Preserve an explicit scheduling request even when NLU omitted its slot.
+        requested_time = time_expression(lower)
+        future = re.search(r"\b(ngay mai|sang mai|chieu mai|toi mai|dat truoc)\b", lower) or requested_time
         immediate = re.search(r"\b(di ngay|ngay bay gio|doi sang ngay|dat ngay)\b", lower)
-        if immediate and not future:
+        provided_time = changes_by_target.get("pickup_time")
+        if provided_time and not (future and normalized(provided_time).strip() in ASAP):
+            state["issues"].pop("raw_scheduled_request", None)
+        elif immediate and not future:
             state["issues"].pop("raw_scheduled_request", None)
         elif future and not hypothetical:
             state["issues"]["raw_scheduled_request"] = {"target": "pickup_time",
-                "text": "Mình đã ghi nhận yêu cầu đặt trước, nhưng bản thử nghiệm chỉ hỗ trợ đi ngay. Hãy nói rõ đổi sang đi ngay nếu bạn muốn tiếp tục."}
+                "text": "Bạn muốn đặt trước vào ngày nào và lúc mấy giờ? Mình cần giờ đón rõ ràng để cập nhật chuyến."}
+            if provided_time and normalized(provided_time).strip() in ASAP:
+                blocked.add("pickup_time")
         multi_stop = re.search(r"\b(ghe(?!\s+(?:tre em|em be|cho be))|them diem dung|dung o)\b|\bqua\b.+\broi den\b", lower)
         remove_stops = re.search(r"\b(bo (?:het )?diem dung|di thang|khong dung giua duong)\b", lower)
         if remove_stops or changes_by_target.get("stops") == []:
@@ -435,20 +453,34 @@ class ChatEngine:
 
     def _replace_slot(self, state: dict, target: str, value: Any, changed: set[str]) -> None:
         old = state["booking_state"][target]["value"]
+        previous_time = state["resolution"].get("pickup_time") if target == "pickup_time" else None
+        reference_at = None
+        if target == "pickup_time" and state["conversation_context"].get("current_focus") == "pickup_time":
+            value, reference_at = merge_time_clarification(previous_time, value)
+        reanchor = target == "pickup_time" and state["turn"].get("reanchor_pickup_time") and bool(
+            re.search(r"\b(?:sau|nua|som hon|muon hon)\b", normalized(value))
+        )
         state["issues"].pop(f"uncertain_{target}", None)
-        if old == value:
+        if old == value and not reanchor:
             return
         state["booking_state"][target] = {"value": deepcopy(value), "confirmed": False}
         state["control"]["slot_revisions"][target] += 1
         state["confirmation"]["slot_evidence"].pop(target, None)
         changed.add(target)
+        if target == "pickup_time":
+            schedule = parse_pickup_time(
+                value, reference_at if reference_at is not None else state["turn"].get("occurred_at", self.clock()),
+                previous_pickup_at=(previous_time or {}).get("pickup_at"),
+            )
+            schedule["source_slot_revision"] = state["control"]["slot_revisions"][target]
+            state["resolution"]["pickup_time"] = schedule
         if target in {"pickup", "destination"}:
             state["resolution"]["locations"].pop(target, None)
             state["resolution"]["candidate_sets"].pop(target, None)
             state["candidates"] = [c for c in state["candidates"] if c["target"] != target]
         if target in {"pickup", "destination", "pickup_time", "vehicle_type", "passengers", "luggage", "stops", "special_requests", "payment_method"}:
             state["resolution"]["quote"] = None
-        if target in {"pickup", "destination", "vehicle_type", "stops"}:
+        if target in {"pickup", "destination", "pickup_time", "vehicle_type", "stops"}:
             state["resolution"]["route"] = None
         if target == "pickup_note" and re.search(r"\b(cong|cua|ga|san don|diem hen)\b", normalized(value)):
             previous = state["resolution"]["locations"].get("pickup")
@@ -509,7 +541,35 @@ class ChatEngine:
                 and prompt["snapshot_fingerprint"] == self._snapshot_fingerprint(state)
                 and all(prompt["slot_revisions"][s] == state["control"]["slot_revisions"][s] for s in prompt["scope"]))
 
+    def _resolve_pickup_time(self, state):
+        raw = state["booking_state"]["pickup_time"]["value"]
+        if not raw:
+            state["resolution"].pop("pickup_time", None)
+            return None
+        revision = state["control"]["slot_revisions"]["pickup_time"]
+        schedule = state["resolution"].get("pickup_time")
+        if not schedule or schedule.get("raw") != raw or schedule.get("source_slot_revision") != revision:
+            schedule = parse_pickup_time(raw, state["turn"].get("occurred_at", self.clock()))
+            schedule["source_slot_revision"] = revision
+            state["resolution"]["pickup_time"] = schedule
+        return schedule
+
+    def _pickup_time_valid(self, state):
+        schedule = state["resolution"].get("pickup_time") or {}
+        if schedule.get("status") != "valid":
+            return False
+        return schedule.get("mode") == "asap" or (
+            schedule.get("mode") == "scheduled" and schedule.get("pickup_at")
+            and datetime.fromisoformat(schedule["pickup_at"]).timestamp() > self.clock()
+        )
+
+    @staticmethod
+    def _pickup_schedule(state):
+        schedule = state["resolution"].get("pickup_time") or {}
+        return {key: schedule.get(key) for key in ("mode", "pickup_at", "timezone")}
+
     async def _resolve(self, state: dict, changed: set[str]) -> None:
+        schedule = self._resolve_pickup_time(state)
         slots = state["booking_state"]
         async def resolve_slot(target: str) -> tuple[str, int, dict]:
             query = slots[target]["value"]
@@ -564,11 +624,16 @@ class ChatEngine:
         if all(locations.get(t, {}).get("status") == "valid" for t in ("pickup", "destination")) and slots["vehicle_type"]["value"] in self.vehicles:
             pickup = locations["pickup"]["place"]
             destination = locations["destination"]["place"]
-            route_fp = fingerprint([pickup, destination, slots["vehicle_type"]["value"]])
+            departure = schedule.get("pickup_at") if schedule and schedule.get("status") == "valid" else None
+            route_fp = fingerprint([pickup, destination, slots["vehicle_type"]["value"], departure])
             route = state["resolution"].get("route")
             if not route or route.get("dependency_fingerprint") != route_fp:
                 try:
-                    route = await self.maps.route(pickup, destination, vehicle_type=slots["vehicle_type"]["value"])
+                    kwargs = {"vehicle_type": slots["vehicle_type"]["value"]}
+                    parameters = inspect.signature(self.maps.route).parameters
+                    if departure and ("departure_time" in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values())):
+                        kwargs["departure_time"] = datetime.fromisoformat(departure)
+                    route = await self.maps.route(pickup, destination, **kwargs)
                     if route and route.get("status", "ok") in {"ok", "resolved", "available", "success"}:
                         route["dependency_fingerprint"] = route_fp
                         state["resolution"]["route"] = route
@@ -620,9 +685,10 @@ class ChatEngine:
         slots = state["booking_state"]
         def issue(key: str, target: str, text: str) -> None:
             state["issues"]["validation_" + key] = {"target": target, "text": text}
-        pickup_time = slots["pickup_time"]["value"]
-        if pickup_time and normalized(pickup_time).strip() not in {"ngay", "ngay bay gio", "bay gio", "di ngay", "asap", "now", "hien tai", "lap tuc"}:
-            issue("scheduled", "pickup_time", "Bản thử nghiệm chưa hỗ trợ đặt trước. Bạn muốn đổi sang đi ngay bây giờ không? Hãy nói rõ đi ngay nếu đồng ý.")
+        schedule = self._resolve_pickup_time(state)
+        if schedule and not self._pickup_time_valid(state):
+            issue("pickup_time", "pickup_time", schedule.get("message") or "Giờ đón đã qua. Bạn cho mình một thời điểm đón mới trong tương lai nhé.")
+            state["confirmation"]["accepted_snapshot"] = None
         phone = slots["contact_phone"]["value"]
         if phone:
             phone = re.sub(r"[\s.()\-]", "", phone)
@@ -662,7 +728,8 @@ class ChatEngine:
     def _quote_fingerprint(self, state: dict) -> str:
         slots = state["booking_state"]
         return fingerprint({"route": state["resolution"].get("route"),
-            "inputs": {s: slots[s]["value"] for s in ("pickup_time", "vehicle_type", "passengers", "luggage", "payment_method", "stops", "special_requests")}})
+            "inputs": {s: slots[s]["value"] for s in ("pickup_time", "vehicle_type", "passengers", "luggage", "payment_method", "stops", "special_requests")},
+            "pickup_schedule": self._pickup_schedule(state)})
 
     def _quote_valid(self, state: dict) -> bool:
         quote = state["resolution"].get("quote")
@@ -674,6 +741,7 @@ class ChatEngine:
                 "draft_id": state["control"]["draft_id"],
                 "booking_revision": state["control"]["booking_revision"],
                 "slots": {s: state["booking_state"][s]["value"] for s in SLOT_NAMES},
+                "pickup_schedule": self._pickup_schedule(state),
                 "pickup": state["resolution"]["locations"].get("pickup", {}).get("place"),
                 "destination": state["resolution"]["locations"].get("destination", {}).get("place"),
                 "contact": state["resolution"].get("contact"),
@@ -694,10 +762,16 @@ class ChatEngine:
             and all(state["booking_state"][s]["value"] is not None for s in self._required(state))
             and all(state["booking_state"][s]["confirmed"] for s in supplied)
             and all(state["resolution"]["locations"].get(s, {}).get("status") == "valid" for s in ("pickup", "destination"))
-            and state["resolution"].get("contact") and self._quote_valid(state)
+            and state["resolution"].get("contact") and self._quote_valid(state) and self._pickup_time_valid(state)
             and accepted["snapshot_fingerprint"] == self._snapshot_fingerprint(state))
 
     async def _create(self, state: dict) -> dict:
+        if not self._pickup_time_valid(state):
+            state["confirmation"]["accepted_snapshot"] = None
+            self._validate_requirements(state)
+            self._decide_response(state)
+            state["last_response"]["reason"] = "PICKUP_TIME_ELAPSED"
+            return state
         payload = self._snapshot_payload(state)
         key = "create:" + state["control"]["draft_id"] + ":" + fingerprint(payload)
         state["transaction"]["active_operation"] = {"type": "create", "idempotency_key": key,
@@ -805,7 +879,12 @@ class ChatEngine:
         booking = state["transaction"].get("booking_result")
         booking_id = booking.get("booking_id", "") if booking else ""
         if state["booking_status"] == "booked":
-            return f"Đã tạo đơn thử nghiệm {booking_id}. Đây là đơn sandbox; chưa điều phối tài xế thật. Bạn có thể hủy đơn nếu cần."
+            schedule = (state["transaction"].get("committed_snapshot") or {}).get("pickup_schedule") or {}
+            when = ""
+            if schedule.get("mode") == "scheduled" and schedule.get("pickup_at"):
+                target = datetime.fromisoformat(schedule["pickup_at"])
+                when = " Giờ đón: " + target.strftime("%H:%M ngày %d/%m/%Y") + " (giờ Việt Nam)."
+            return f"Đã tạo đơn thử nghiệm {booking_id}.{when} Đây là đơn sandbox; chưa điều phối tài xế thật. Bạn có thể hủy đơn nếu cần."
         if state["booking_status"] == "cancelled":
             return f"Đã hủy đơn thử nghiệm {booking_id}." if booking_id else "Đã hủy bản nháp."
         if state["booking_status"] == "booking_failed":
@@ -824,7 +903,7 @@ class ChatEngine:
             elif re.search(r"\b(tai xe|bien so|bao lau|eta)\b", questions):
                 prefix = "Đây là sandbox; chưa có tài xế hoặc thời gian đón thật. "
             else:
-                prefix = "Mình hỗ trợ tạo, xem và hủy đơn thử nghiệm đi ngay, một chiều. "
+                prefix = "Mình hỗ trợ tạo, xem và hủy đơn thử nghiệm đi ngay hoặc đặt trước, một chiều. "
         if state["issues"]:
             issue = next(iter(state["issues"].values()))
             return self._respond(state, "ask_clarification", prefix + issue["text"], issue.get("target"))
@@ -873,7 +952,7 @@ class ChatEngine:
         payload = self._snapshot_payload(state)
         quote = state["resolution"]["quote"]
         summary = {"pickup": payload["pickup"]["label"], "destination": payload["destination"]["label"],
-            "pickup_time": "Ngay bây giờ", "passengers": slots["passengers"]["value"],
+            "pickup_time": state["resolution"]["pickup_time"]["label"], "passengers": slots["passengers"]["value"],
             "vehicle_type": slots["vehicle_type"]["value"],
             "vehicle_label": self.vehicle_labels[slots["vehicle_type"]["value"]],
             "contact_phone": payload["contact"]["phone"],
@@ -884,7 +963,7 @@ class ChatEngine:
             "quote_expires_at": quote["expires_at"], "booking_revision": state["control"]["booking_revision"],
             "snapshot_fingerprint": self._snapshot_fingerprint(state)}
         lines = [f"Đón: {summary['pickup']}", f"Đến: {summary['destination']}",
-            f"Đi ngay · {summary['passengers']} người · {summary['vehicle_label']}",
+            f"{'Đi ngay' if payload['pickup_schedule']['mode'] == 'asap' else 'Giờ đón: ' + summary['pickup_time']} · {summary['passengers']} người · {summary['vehicle_label']}",
             f"Liên hệ: {summary['contact_phone']}"]
         if summary["contact_name"]:
             lines.append("Người đi: " + summary["contact_name"])

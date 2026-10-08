@@ -72,7 +72,7 @@ def test_complete_summary_only_creates_after_delivered_consent(setup):
         assert state["transaction"]["booking_result"]["booking_id"].startswith("SBX-")
         assert provider.booking_count() == 1
         assert state["transaction"]["committed_snapshot"]["slots"] == CORE_VALUES | {
-            slot: None for slot in ("contact_name", "pickup_note", "luggage", "payment_method", "stops", "special_requests")}
+            slot: None for slot in ("contact_name", "pickup_note", "luggage", "payment_method", "stops", "special_requests", "general_note")}
         retry = await engine.process(state, "Đồng ý", event_id="confirm")
         assert retry == state
         assert provider.operation_count() == 1

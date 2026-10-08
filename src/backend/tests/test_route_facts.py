@@ -184,7 +184,7 @@ def test_missing_route_context_and_stale_traffic_never_claim_current_traffic():
 
 @pytest.mark.parametrize("text", ["sao nhanh thế", "sao đi lâu vậy"])
 def test_exact_customer_phrases_are_interpreted_as_duration_explanation(text):
-    from app.domain.conversation import ConversationEngine
+    from app.domain.conversation import LegacyConversationEngine as ConversationEngine
 
     inquiry = service()
     state = new_conversation_state("customer-phrase")

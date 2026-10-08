@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Literal
 
@@ -57,9 +59,33 @@ class LocalAliasRegistry:
             return "ambiguous", None
         return "matched", scoped[0]
 
+    def fuzzy(self, query: str, area: str | None = None):
+        key = search_key(query)
+        candidates = []
+        for row in self.entries:
+            if set(re.findall(r"\d+[a-z]?", key)) != set(re.findall(r"\d+[a-z]?", search_key(row.alias))):
+                continue
+            if area and search_key(area) != search_key(row.area):
+                continue
+            if not area and search_key(row.area) not in key:
+                continue
+            score = max(SequenceMatcher(None, key, search_key(label)).ratio()
+                        for label in (row.alias, row.alias + " " + row.area))
+            if score >= .82:
+                candidates.append((score, row))
+        candidates.sort(key=lambda pair: pair[0], reverse=True)
+        if not candidates or (len(candidates) > 1 and candidates[0][1].entity_id != candidates[1][1].entity_id
+                              and candidates[0][0] - candidates[1][0] < .05):
+            return None
+        return candidates[0][1]
+
 
 async def resolve_with_alias(adapter, registry, query, target, context):
     status, alias = registry.lookup(query, (context or {}).get("area"))
+    fuzzy = False
+    if status == "none":
+        alias = registry.fuzzy(query, (context or {}).get("area"))
+        fuzzy = alias is not None
     if status == "ambiguous":
         from app.contracts.maps import resolution
 
@@ -89,4 +115,10 @@ async def resolve_with_alias(adapter, registry, query, target, context):
             if place:
                 place["metadata"]["local_alias"] = evidence.copy()
         result["query"] = query
+        if fuzzy and result.get("place"):
+            result["candidates"] = [result.pop("place")]
+            result["place"] = None
+            result["status"] = "ambiguous"
+            result["reason_codes"] = ["FUZZY_ALIAS_MATCH"]
+            result["clarification"] = "Có phải bạn muốn nói địa điểm này không?"
     return result

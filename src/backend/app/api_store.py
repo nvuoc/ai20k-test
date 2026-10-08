@@ -22,6 +22,11 @@ def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def transaction_unknown(state):
+    return (state.get("booking_status") in {"booking_unknown", "cancel_unknown"}
+            or (state.get("transaction", {}).get("active_operation") or {}).get("status") in {"dispatched", "unknown"})
+
+
 class Conflict(Exception):
     pass
 
@@ -114,10 +119,10 @@ class ApiStore:
             if existing:
                 return existing["id"]
             count = db.execute("SELECT COUNT(*) FROM api_sessions WHERE owner=?", (owner,)).fetchone()[0]
-            if count >= self.limits.max_sessions_per_owner:
+            if self.limits.admission_limits_enabled and count >= self.limits.max_sessions_per_owner:
                 raise AdmissionError("OWNER_SESSION_LIMIT", "Bạn đã đạt giới hạn phiên thử nghiệm. Hãy tiếp tục phiên hiện có hoặc liên hệ người quản trị.")
             count = db.execute("SELECT COUNT(*) FROM api_sessions").fetchone()[0]
-            if count >= self.limits.max_sessions_total:
+            if self.limits.admission_limits_enabled and count >= self.limits.max_sessions_total:
                 raise AdmissionError("SESSION_CAPACITY", "Hệ thống thử nghiệm đã đạt giới hạn phiên. Người quản trị cần kiểm tra dung lượng.")
             self._reserve_admission(db, owner)
             db.execute("INSERT INTO api_sessions(id,owner,client_key,projection,created_at) "
@@ -128,6 +133,8 @@ class ApiStore:
 
     def _reserve_admission(self, db, owner):
         """One atomic rolling window for accepted new sessions/events only."""
+        if not self.limits.admission_limits_enabled:
+            return
         timestamp = self.clock()
         db.execute("DELETE FROM api_admission_requests WHERE reserved_at<=?", (timestamp-60,))
         buckets = (("global", self.limits.inbound_global_rpm),
@@ -167,10 +174,10 @@ class ApiStore:
             row = db.execute("SELECT latest_seq,owner FROM api_sessions WHERE id=?",
                              (session_id,)).fetchone()
             count = db.execute("SELECT COUNT(*) FROM api_inbox WHERE session_id=? AND status IN ('queued','processing')", (session_id,)).fetchone()[0]
-            if count >= self.limits.max_pending_per_session:
+            if self.limits.admission_limits_enabled and count >= self.limits.max_pending_per_session:
                 raise AdmissionError("SESSION_QUEUE_FULL", "Phiên này đang có nhiều tin nhắn chờ xử lý. Bạn chờ bot trả lời trước khi gửi thêm nhé.", retry_after_seconds=5)
             count = db.execute("SELECT COUNT(*) FROM api_inbox WHERE status IN ('queued','processing')").fetchone()[0]
-            if count >= self.limits.max_pending_total:
+            if self.limits.admission_limits_enabled and count >= self.limits.max_pending_total:
                 raise AdmissionError("INBOX_CAPACITY", "Hệ thống đang bận. Bạn thử gửi lại sau một chút nhé.", retry_after_seconds=5)
             self._reserve_admission(db, row["owner"])
             seq = row["latest_seq"] + 1
@@ -299,7 +306,7 @@ class ApiStore:
 
     @staticmethod
     def _sync_reconciliation(db, session_id, state):
-        if state.get("booking_status") in {"booking_unknown", "cancel_unknown"}:
+        if transaction_unknown(state):
             db.execute("INSERT OR IGNORE INTO api_reconciliation(session_id,next_at) VALUES(?,?)",
                        (session_id, time.time() + 1))
         else:
@@ -312,7 +319,7 @@ class ApiStore:
             unknown = []
             for row in rows:
                 state = json.loads(row["projection"])
-                if state.get("booking_status") in {"booking_unknown", "cancel_unknown"}:
+                if transaction_unknown(state):
                     unknown.append(row["id"])
                     self._sync_reconciliation(db, row["id"], state)
             return unknown
@@ -353,7 +360,7 @@ class ApiStore:
             booking = state.get("transaction", {}).get("booking_result")
             if booking:
                 self._event(db, session_id, event_id + ":booking", "booking_updated", booking)
-            if state.get("booking_status") not in {"booking_unknown", "cancel_unknown"}:
+            if not transaction_unknown(state):
                 db.execute("DELETE FROM api_reconciliation WHERE session_id=?", (session_id,))
                 return
             attempt = row["attempt"] + 1

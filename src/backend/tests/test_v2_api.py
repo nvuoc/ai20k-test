@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 import pytest
 from test_api import (  # noqa: F401
     acknowledge,
+    advance_confirmations,
     client,
     complete,
     create_session,
@@ -44,6 +45,7 @@ def test_scoped_inquiry_action_and_reload(client):
     sid = create_session(client)["session_id"]
     complete(client, sid)
     snapshot, _ = send_text(client, sid, INQUIRY)
+    snapshot = advance_confirmations(client, sid, snapshot)
     shown = snapshot["active_response"]
     item = shown["inquiry"]
     assert client.get(f"/api/sessions/{sid}").json()["active_response"]["inquiry"] == item
@@ -56,6 +58,7 @@ def test_scoped_inquiry_action_and_reload(client):
         "booking_revision": item["booking_revision"],
     }
     updated, _ = send_action(client, sid, action, reply=shown["response_id"])
+    updated = advance_confirmations(client, sid, updated)
     assert "cổng sau" in updated["active_response"]["summary"]["destination"]
     assert client.app.state.engine.booking.booking_count() == 0
 

@@ -127,7 +127,9 @@ def test_runtime_uses_groq_then_gemini_and_closes_both(monkeypatch, tmp_path):
         async with conversation_runtime(settings) as (engine, _):
             result = await engine.extractor(payload())
             assert result.dialogue_acts[0].target == "pickup"
-            assert not engine.kwargs["area_assistance_enabled"]
+            assert "area_assistance_enabled" not in engine.kwargs
+            assert engine.kwargs["kb"].tariff("oto_4_cho")["final_amount_basis"] == "meter"
+            assert engine.kwargs["crm"] is not None and engine.kwargs["mega_pois"] is not None
     asyncio.run(run())
     assert len(created) == 2
     assert created[0].calls[0]["model"] == "openai/gpt-oss-120b"

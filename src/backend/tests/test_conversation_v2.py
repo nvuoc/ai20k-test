@@ -16,7 +16,7 @@ from app.adapters.quote_fixture import QuoteAdapter
 from app.adapters.weather_fixture import FixtureWeatherAdapter
 from app.config import Settings
 from app.contracts.weather import WeatherFact, WeatherSample
-from app.domain.conversation import ConversationEngine
+from app.domain.conversation import LegacyConversationEngine as ConversationEngine
 from app.graph.builder import DurableGraph
 from app.text import TextBot, main
 
@@ -63,6 +63,44 @@ async def say(engine, state, text="", action=None, delivered=True):
         delivered_response_ids=[response["response_id"]] if delivered else [],
         reply_to_response_id=response["response_id"],
     )
+
+
+@pytest.mark.parametrize("code", ["PROVIDER_AUTH_ERROR", "PROVIDER_MODEL_UNAVAILABLE", "PROVIDER_CONFIG_ERROR"])
+def test_provider_configuration_error_does_not_lock_chat(runtime, tmp_path, code):
+    from app.adapters.extractor import ExtractorError
+    from app.api_store import ApiStore
+    from app.workers.coordinator import Coordinator
+
+    engine, provider, _ = runtime
+    original = engine.extractor
+
+    async def unavailable(data):
+        raise ExtractorError(code, "Provider configuration failed")
+
+    async def run():
+        store = ApiStore(tmp_path / "api.sqlite")
+        async with DurableGraph(engine, tmp_path / "chat.sqlite") as graph:
+            state = engine.new_state("session")
+            await graph.initialize("session", state)
+            store.create_session("session", "owner", "client", state)
+            coordinator = Coordinator(store, graph)
+            engine.extractor = unavailable
+            store.enqueue("session", "message", "first", {"text": COMPLETE})
+            await coordinator.run_session("session")
+            snapshot = store.snapshot("session")
+            assert not snapshot["needs_support"]
+            assert snapshot["pending_count"] == 0
+            assert "lỗi cấu hình" in snapshot["state"]["last_response"]["text"]
+            assert provider.booking_count() == 0
+            engine.extractor = original
+            store.enqueue("session", "message", "second", {"text": COMPLETE})
+            await coordinator.run_session("session")
+            snapshot = store.snapshot("session")
+            assert not snapshot["needs_support"]
+            assert snapshot["pending_count"] == 0
+            assert snapshot["state"]["last_response"]["reason"] != code
+
+    asyncio.run(run())
 
 
 def test_inquiry_preserves_booking_and_groups_route_reads(runtime):
@@ -304,10 +342,13 @@ def test_main_text_function_persists_and_deduplicates(tmp_path):
         database_path=tmp_path / "app.sqlite",
         checkpoint_path=tmp_path / "graph.sqlite",
     )
-    assert "ParrotGo" in main("Bạn là ai?", settings=settings, session_id="caller")
+    assert "ParrotGo" in main("Bạn là ai?", settings=settings, session_id="caller", customer_phone="0901234567", customer_name="An")
     summary = main(COMPLETE, settings=settings, session_id="caller", message_id="collect")
-    assert "Giá thử nghiệm" in summary
+    assert "Có phải đón bạn" in summary
     assert main(COMPLETE, settings=settings, session_id="caller", message_id="collect") == summary
+    for _ in range(3):
+        summary = main("đúng", settings=settings, session_id="caller")
+    assert "đồng/km" in summary
     result = main("Đồng ý đặt", settings=settings, session_id="caller", message_id="confirm")
     assert "SBX-" in result
     assert (
@@ -319,7 +360,7 @@ def test_main_text_function_persists_and_deduplicates(tmp_path):
         database_path=tmp_path / "other.sqlite",
         checkpoint_path=tmp_path / "other-graph.sqlite",
     )
-    assert "ParrotGo" in main("Bạn là ai?", settings=other)
+    assert "ParrotGo" in main("Bạn là ai?", settings=other, customer_phone="0901234567", customer_name="An")
 
 
 def test_text_bot_multiple_sessions_keep_separate_state(tmp_path):
@@ -332,9 +373,9 @@ def test_text_bot_multiple_sessions_keep_separate_state(tmp_path):
 
     async def run():
         async with TextBot(settings) as bot:
-            a = await bot.ask(COMPLETE, session_id="a")
-            b = await bot.ask("Bạn là ai?", session_id="b")
-            assert "Giá thử nghiệm" in a
+            a = await bot.ask(COMPLETE, session_id="a", customer_phone="0901234567", customer_name="An")
+            b = await bot.ask("Bạn là ai?", session_id="b", customer_phone="0911234567", customer_name="Bình")
+            assert "Có phải đón bạn" in a
             assert "ParrotGo" in b and "0901234567" not in b
 
     asyncio.run(run())

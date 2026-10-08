@@ -17,6 +17,8 @@ on:
       - 'src/backend/**'
       - 'src/frontend/**'
       - 'deploy/**'
+      - 'src/scripts/**'
+      - 'VOICE_SETUP.md'
       - 'Dockerfile'
       - '.dockerignore'
       - '.github/workflows/package.yml'
@@ -26,28 +28,69 @@ on:
       - 'src/backend/**'
       - 'src/frontend/**'
       - 'deploy/**'
+      - 'src/scripts/**'
+      - 'VOICE_SETUP.md'
       - 'Dockerfile'
       - '.dockerignore'
       - '.github/workflows/package.yml'
 
 permissions:
   contents: read
-  packages: write    # <--- BẮT BUỘC: Cho phép workflow đẩy Docker image lên GHCR
+  packages: write
 
 concurrency:
   group: package-${{ github.workflow }}-${{ github.ref }}-${{ inputs.platform || 'linux/amd64' }}
   cancel-in-progress: true
 
 jobs:
-  package:
+  validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.0'
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install locked backend and voice dependencies
+        working-directory: src/backend
+        run: |
+          python -m pip install uv==0.12.19
+          uv sync --locked --extra dev --extra voice
+      - name: Check backend and deployment scripts
+        working-directory: src/backend
+        run: |
+          uv run --no-sync ruff check app tests ../../deploy/package.py ../../deploy/smoke_image.py
+          uv run --no-sync pytest -q
+          uv export --locked --extra voice --no-dev --no-emit-project --no-header --output-file /tmp/requirements.voice.lock --quiet
+          diff <(tail -n +3 requirements.voice.lock) /tmp/requirements.voice.lock
+          bash -n ../../deploy/setup.sh ../../deploy/backup.sh
+      - name: Frontend build and browser tests
+        working-directory: src/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+  package:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     env:
       PLATFORM: ${{ inputs.platform || 'linux/amd64' }}
       DOCKER_BUILD_RECORD_UPLOAD: 'false'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -63,15 +106,15 @@ jobs:
 
       - name: Enable ARM emulation
         if: env.PLATFORM == 'linux/arm64'
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
-      - name: Build frontend and backend image
-        uses: docker/build-push-action@v5
+      - name: Build frontend, API and voice agent image
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -85,6 +128,14 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=parrotgo-${{ steps.target.outputs.arch }}
           cache-to: type=gha,mode=max,scope=parrotgo-${{ steps.target.outputs.arch }}
+
+      - name: Check native speech runtime without external credentials
+        run: |
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            parrotgo:local python -m app.voice.check_runtime
+          docker run --rm --network none parrotgo:local python -m app.voice.agent start --help
 
       - name: Smoke test image with offline fixtures and persistent data
         shell: bash
@@ -102,14 +153,13 @@ jobs:
             -e DOMAIN -e ACME_EMAIL -e BETA_USER -e BETA_PASSWORD_HASH \
             --mount "type=bind,src=$PWD/deploy/Caddyfile,dst=/etc/caddy/Caddyfile,readonly" \
             caddy:2 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          cp deploy/.env.example deploy/.env
+          APP_SECRET=ci-placeholder-secret-at-least-32-characters \
+            docker compose --env-file deploy/.env -f deploy/compose.yaml --profile voice config --quiet
 
-      # =========================================================================
-      # CÁC BƯỚC ĐẨY LÊN GITHUB CONTAINER REGISTRY (GHCR) OKE
-      # =========================================================================
       - name: Log in to GitHub Container Registry
-        # Chỉ đẩy lên registry khi commit vào main/tag hoặc chạy manual, không đẩy khi có Pull Request
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -118,15 +168,40 @@ jobs:
       - name: Push image to GHCR
         if: github.event_name != 'pull_request'
         shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+          ARCH: ${{ steps.target.outputs.arch }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          # GHCR bắt buộc tên repository phải viết thường hoàn toàn (lowercase)
-          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          IMAGE_NAME="ghcr.io/$REPO_LC"
+          image="ghcr.io/${REPOSITORY,,}"
+          docker tag parrotgo:local "$image:$COMMIT-$ARCH"
+          docker push "$image:$COMMIT-$ARCH"
+          if [[ "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" ]]; then
+            docker tag parrotgo:local "$image:latest-$ARCH"
+            docker push "$image:latest-$ARCH"
+          fi
+          echo "Image: $image:$COMMIT-$ARCH" >> "$GITHUB_STEP_SUMMARY"
 
-          # Gắn tag commit SHA và tag latest
-          docker tag parrotgo:local "$IMAGE_NAME:${{ github.sha }}"
-          docker tag parrotgo:local "$IMAGE_NAME:latest"
+      - name: Export portable VPS bundle
+        if: github.event_name != 'pull_request'
+        env:
+          COMMIT: ${{ github.sha }}
+        run: |
+          python3 deploy/package.py
+          mkdir -p bundle
+          cp deploy/parrotgo-vps.tar.gz bundle/
+          docker save parrotgo:local | gzip -1 > bundle/parrotgo-image.tar.gz
+          printf 'commit=%s\nplatform=%s\nimage=parrotgo:local\nrun=%s\n' \
+            "$COMMIT" "$PLATFORM" "$GITHUB_RUN_ID" > bundle/BUILD_INFO.txt
+          cd bundle
+          sha256sum parrotgo-vps.tar.gz parrotgo-image.tar.gz BUILD_INFO.txt > SHA256SUMS
 
-          # Push cả 2 tag lên GHCR
-          docker push "$IMAGE_NAME:${{ github.sha }}"
-          docker push "$IMAGE_NAME:latest"
+      - uses: actions/upload-artifact@v7
+        if: github.event_name != 'pull_request'
+        with:
+          name: parrotgo-vps-${{ steps.target.outputs.arch }}-${{ github.sha }}
+          path: bundle/
+          retention-days: 14
+          compression-level: 0
+          if-no-files-found: error

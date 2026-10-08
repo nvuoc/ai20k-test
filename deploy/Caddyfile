@@ -9,15 +9,20 @@
     header X-Content-Type-Options "nosniff"
     header Referrer-Policy "same-origin"
 
-    # Protect the page, anonymous bootstrap and all API endpoints during beta.
-    basic_auth {
-        {$BETA_USER} {$BETA_PASSWORD_HASH}
-    }
     request_body {
         max_size 65536
     }
-    reverse_proxy app:8000 {
-        # Browser credentials belong to Caddy, not to the application or providers.
-        header_up -Authorization
+    # Worker authentication is available only over the private Compose network.
+    @agent_api path /api/voice-agent/*
+    handle @agent_api {
+        respond 404
+    }
+    handle {
+        basic_auth {
+            {$BETA_USER} {$BETA_PASSWORD_HASH}
+        }
+        reverse_proxy app:8000 {
+            header_up -Authorization
+        }
     }
 }

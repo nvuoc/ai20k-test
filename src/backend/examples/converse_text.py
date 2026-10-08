@@ -29,15 +29,16 @@ async def run():
                 "Đồng ý đặt",
                 "Bạn là ai?",
                 "Hủy đơn",
+                "Đồng ý hủy",
                 "Thời tiết ở Nhà hát Lớn Hà Nội bây giờ có mưa không?",
             ]:
                 print("Khách: " + text)
-                print("Bot: " + await bot.ask(text))
+                print("Bot: " + await bot.ask(text, customer_phone="0901234567", customer_name="An"))
                 # All interactions use customer text; no UI actions are needed.
-                for _ in range(3):
+                for _ in range(10):
                     sid = bot.store.find_session("local-text", "default")
                     state = bot.store.snapshot(sid)["state"] if sid else None
-                    if not state or state["last_response"]["action"] != "confirm_location":
+                    if not state or state["last_response"]["action"] != "confirm_slots":
                         break
                     print("Khách: đúng")
                     print("Bot: " + await bot.ask("đúng"))

@@ -16,6 +16,7 @@ QuestionType = Literal[
     "route_distance",
     "vehicle_catalog",
     "pickup_availability",
+    "place_location",
     "weather_forecast",
     "price_objection",
     "travel_duration",
@@ -24,6 +25,9 @@ QuestionType = Literal[
     "chit_chat",
     "out_of_scope",
     "unclear",
+    "static_faq",
+    "session_question",
+    "route_membership",
 ]
 
 
@@ -108,6 +112,7 @@ class TurnInput(NluInput):
     capabilities: dict[str, bool] = Field(default_factory=dict)
     occurred_at: str
     timezone: str = "Asia/Ho_Chi_Minh"
+    architecture_state: dict[str, Any] | None = None
 
 
 class LocationDecision(StrictContract):

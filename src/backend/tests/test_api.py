@@ -33,9 +33,23 @@ def client(settings):
 
 
 def create_session(client, key="trip-one"):
-    response = client.post("/api/sessions", json={"client_session_key":key})
+    response = client.post("/api/sessions", json={"client_session_key":key, "customer_phone":"0901234567", "customer_name":"An"})
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def test_profile_is_required_and_phone_is_not_a_conversation_id(client):
+    missing = client.post("/api/sessions", json={"client_session_key": "missing-profile"})
+    assert missing.status_code == 422
+    a = create_session(client, "profile-a")
+    b = create_session(client, "profile-b")
+    assert a["session_id"] != b["session_id"]
+    uuid.UUID(a["session_id"])
+    assert a["customer_phone"] == b["customer_phone"] == "0901234567"
+    assert create_session(client, "profile-a")["session_id"] == a["session_id"]
+    wrong = client.post("/api/sessions", json={"client_session_key": "profile-a",
+                                              "customer_phone": "0911234567", "customer_name": "Bình"})
+    assert wrong.status_code == 409
 
 
 def poll(client, session_id, *, event_id=None, timeout=8):
@@ -88,9 +102,26 @@ def confirm_action(response):
             "snapshot_fingerprint":summary["snapshot_fingerprint"]}
 
 
+def advance_confirmations(client, session_id, snapshot):
+    for _ in range(10):
+        shown = snapshot["active_response"]
+        if shown["action"] != "confirm_slots":
+            return snapshot
+        snapshot, _ = send_text(client, session_id, "đúng", rendered=[shown["response_id"]], reply=shown["response_id"])
+    pytest.fail("Slot confirmation did not converge")
+
+
+def confirm_cancel(client, session_id, snapshot):
+    assert snapshot["booking_status"] == "cancel_pending"
+    shown = snapshot["active_response"]
+    return send_action(client, session_id, {"type":"confirm_cancel", "prompt_id":shown["presentation"]["prompt_id"]},
+                       rendered=[shown["response_id"]], reply=shown["response_id"])[0]
+
+
 def complete(client, session_id):
     snapshot, _ = send_text(client, session_id, COMPLETE_TEXT)
-    assert snapshot["booking_status"] == "awaiting_confirmation"
+    snapshot = advance_confirmations(client, session_id, snapshot)
+    assert snapshot["booking_status"] == "ready_to_book"
     assert snapshot["booking"] is None
     assert snapshot["active_response"]["action"] == "confirm_booking"
     return snapshot
@@ -101,7 +132,7 @@ def test_complete_confirm_cancel_use_durable_sandbox(client, typed):
     session_id = create_session(client)["session_id"]
     snapshot = complete(client, session_id)
     shown = snapshot["active_response"]
-    assert shown["summary"]["fare"] == 46000
+    assert shown["summary"]["tariff"]["per_km"] == 11500
     assert client.app.state.engine.booking.booking_count() == 0
     assert acknowledge(client, session_id, shown).status_code == 200
     if typed:
@@ -111,16 +142,17 @@ def test_complete_confirm_cancel_use_durable_sandbox(client, typed):
     assert booked["booking_status"] == "booked"
     booking_id = booked["booking"]["booking_id"]
     assert booking_id.startswith("SBX-")
-    assert "Đã tạo đơn thử nghiệm" in booked["active_response"]["text"]
+    assert "Đã tạo cuốc xe thử nghiệm" in booked["active_response"]["text"]
     assert client.app.state.engine.booking.booking_count() == 1
     assert client.get(f"/api/sessions/{session_id}/booking").json()["booking"]["booking_id"] == booking_id
     if typed:
         cancelled, _ = send_action(client, session_id, {"type":"cancel_booking","booking_id":booking_id})
     else:
         cancelled, _ = send_text(client, session_id, "Hủy chuyến")
-    assert cancelled["booking_status"] == "cancelled"
+    cancelled = confirm_cancel(client, session_id, cancelled)
+    assert cancelled["booking_status"] == "canceled"
     assert cancelled["booking"]["provider_status"] == "cancelled"
-    assert "Đã hủy đơn thử nghiệm" in cancelled["active_response"]["text"]
+    assert "Yêu cầu đặt xe đã hủy" in cancelled["active_response"]["text"]
     assert client.app.state.engine.booking.operation_count("create") == 1
     assert client.app.state.engine.booking.operation_count("cancel") == 1
 
@@ -135,7 +167,8 @@ def test_typed_actions_and_delivery_ack_never_call_llm(client):
     booked, _ = send_action(client, session_id, confirm_action(shown), reply=shown["response_id"])
     assert booked["booking_status"] == "booked"
     cancelled, _ = send_action(client, session_id, {"type":"cancel_booking","booking_id":booked["booking"]["booking_id"]})
-    assert cancelled["booking_status"] == "cancelled"
+    cancelled = confirm_cancel(client, session_id, cancelled)
+    assert cancelled["booking_status"] == "canceled"
 
 
 def test_render_evidence_bundled_with_input_is_persisted_atomically(client):
@@ -161,16 +194,17 @@ def test_unshown_summary_or_stale_typed_fingerprint_cannot_book(client):
 
 def test_typed_candidate_selection_derives_target_from_scoped_set(client):
     session_id = create_session(client)["session_id"]
-    snapshot, _ = send_text(client, session_id, "Đón ở Nhà hát Lớn Hà Nội, đến Bệnh viện Bạch Mai, ngay bây giờ, 2 người, xe 4 chỗ, số điện thoại 0901234567")
+    snapshot, _ = send_text(client, session_id, "Đón ở Nhà hát Lớn Hà Nội, đến Trường Sao Mai, ngay bây giờ, 2 người, xe 4 chỗ, số điện thoại 0901234567")
+    snapshot = advance_confirmations(client, session_id, snapshot)
     shown = snapshot["active_response"]
-    assert shown["action"] == "offer_candidates"
+    assert shown["action"] == "clarify_address"
     candidate = shown["candidates"][0]
     async def forbidden(projection):
         raise AssertionError("Selecting a candidate must not call Gemini")
     client.app.state.engine.extractor = forbidden
     selected, _ = send_action(client, session_id, {"type":"select_candidate", "candidate_set_id":candidate["candidate_set_id"], "candidate_id":candidate["candidate_id"]}, rendered=[shown["response_id"]], reply=shown["response_id"])
-    assert selected["active_response"]["action"] == "confirm_booking"
-    assert "cổng chính" in selected["active_response"]["summary"]["destination"]
+    assert selected["active_response"]["action"] == "confirm_slots"
+    assert "Sao Mai" in selected["active_response"]["text"]
 
 
 def test_realistic_provider_opaque_candidate_ref_longer_than_128(client):
@@ -181,32 +215,34 @@ def test_realistic_provider_opaque_candidate_ref_longer_than_128(client):
         async def resolve(self, query, target="pickup", context=None):
             result = await maps.resolve(query, target=target, context=context)
             for place in result["candidates"]:
-                if place["id"] == "hn_bachmai_front":
+                if place["id"] == "hn_sunshine_a":
                     place["id"] = long_id
             return result
 
         async def route(self, pickup, destination, vehicle_type=None):
             if destination["id"] == long_id:
-                destination = destination | {"id":"hn_bachmai_front"}
+                destination = destination | {"id":"hn_sunshine_a"}
             return await maps.route(pickup, destination, vehicle_type=vehicle_type)
 
     client.app.state.engine.maps = OpaqueMaps()
     session_id = create_session(client)["session_id"]
-    snapshot, _ = send_text(client, session_id, "Đón ở Nhà hát Lớn Hà Nội, đến Bệnh viện Bạch Mai, ngay bây giờ, 2 người, xe 4 chỗ, số điện thoại 0901234567")
+    snapshot, _ = send_text(client, session_id, "Đón ở Nhà hát Lớn Hà Nội, đến Trường Sao Mai, ngay bây giờ, 2 người, xe 4 chỗ, số điện thoại 0901234567")
+    snapshot = advance_confirmations(client, session_id, snapshot)
     shown = snapshot["active_response"]
     candidate = shown["candidates"][0]
-    assert candidate["candidate_id"] == long_id
+    assert len(candidate["candidate_id"]) > 128
     selected, _ = send_action(client, session_id, {"type":"select_candidate", "candidate_set_id":candidate["candidate_set_id"], "candidate_id":candidate["candidate_id"]}, rendered=[shown["response_id"]], reply=shown["response_id"])
-    assert selected["active_response"]["action"] == "confirm_booking"
+    assert selected["active_response"]["action"] == "confirm_slots"
 
 
 def test_typed_cancel_draft_and_wrong_refs(client):
     session_id = create_session(client)["session_id"]
     snapshot = complete(client, session_id)
     wrong, _ = send_action(client, session_id, {"type":"cancel_draft","draft_id":"another-draft"})
-    assert wrong["booking_status"] != "cancelled"
+    assert wrong["booking_status"] != "canceled"
     cancelled, _ = send_action(client, session_id, {"type":"cancel_draft","draft_id":snapshot["draft_id"]})
-    assert cancelled["booking_status"] == "cancelled"
+    cancelled = confirm_cancel(client, session_id, cancelled)
+    assert cancelled["booking_status"] == "canceled"
     assert client.app.state.engine.booking.booking_count() == 0
 
 
@@ -232,6 +268,7 @@ def test_message_dedup_conflict_and_action_namespace(client):
     assert conflict.status_code == 409
     assert conflict.json()["code"] == "IDEMPOTENCY_CONFLICT"
     assert "Nội dung khác" not in conflict.text
+    snapshot = advance_confirmations(client, session_id, snapshot)
     shown = snapshot["active_response"]
     booked, action_receipt = send_action(client, session_id, confirm_action(shown), key="shared-id", rendered=[shown["response_id"]], reply=shown["response_id"])
     assert action_receipt["event_id"] != first["event_id"]

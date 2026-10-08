@@ -1,0 +1,17 @@
+{
+  "version": "booking-kb-mvp-1",
+  "notice": "Chính sách và đơn giá cấu hình cho MVP sandbox. Quản trị viên cần thay bằng chính sách của đơn vị vận hành trước khi phục vụ khách thật.",
+  "vehicles": {
+    "xe_may": {"label": "Xe máy", "max_passengers": 1, "per_km": 6000, "route_profile": "motorcycle", "bookable": true, "quote_available": true},
+    "oto_4_cho": {"label": "Ô tô 4 chỗ", "max_passengers": 4, "per_km": 11500, "route_profile": "car", "bookable": true, "quote_available": true},
+    "oto_7_cho": {"label": "Ô tô 7 chỗ", "max_passengers": 6, "per_km": 14500, "route_profile": "car", "bookable": true, "quote_available": true}
+  },
+  "policies": [
+    {"id": "luggage", "keywords": ["hành lý", "vali", "cốp"], "answer": "Bạn cho biết số kiện và kích cỡ hành lý để chọn xe phù hợp; yêu cầu cốp rộng sẽ được ghi chú cho tài xế."},
+    {"id": "pet", "keywords": ["thú cưng", "chó", "mèo"], "answer": "Bạn báo trước việc mang thú cưng và chuẩn bị lồng hoặc túi vận chuyển. Bot ghi chú yêu cầu để nhân viên hoặc tài xế xác nhận khả năng phục vụ."},
+    {"id": "bulky", "keywords": ["cồng kềnh", "đồ lớn", "hàng lớn"], "answer": "Bạn cung cấp kích thước đồ cồng kềnh. Yêu cầu sẽ được ghi chú; nhân viên cần xác nhận xe có thể chở trước khi vận chuyển."},
+    {"id": "child_seat", "keywords": ["ghế trẻ em", "ghế em bé"], "answer": "Bạn báo trước nhu cầu ghế trẻ em. Yêu cầu được ghi chú và cần đơn vị vận hành xác nhận tình trạng ghế, bot không bảo đảm có sẵn."},
+    {"id": "smoking", "keywords": ["hút thuốc", "thuốc lá"], "answer": "Không hút thuốc trong xe theo chính sách MVP. Bot có thể ghi chú yêu cầu tài xế không hút thuốc."},
+    {"id": "meter", "keywords": ["đồng hồ", "trọn gói", "tiền cuối", "chính sách giá"], "answer": "Bot chỉ báo đơn giá trên mỗi kilomet. Tiền cuối cùng tính theo đồng hồ và quãng đường thực tế tài xế đi."}
+  ]
+}

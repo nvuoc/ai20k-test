@@ -10,9 +10,31 @@ export type AckInput = {
 
 export type ActionInput = {
   "client_action_id": string;
-  "action": SelectCandidate | ConfirmBooking | CancelBooking | CancelDraft | UseInquiryRoute | ChooseInquiryVehicle | ResumeBooking | DismissInquiry;
+  "action": SelectCandidate | ConfirmBooking | CancelBooking | CancelDraft | ConfirmCancel | UseInquiryRoute | ChooseInquiryVehicle | ResumeBooking | DismissInquiry;
   "reply_to_response_id"?: string | null;
   "rendered_response_ids"?: Array<string>;
+};
+
+export type AddressComponents = {
+  "detail"?: string | null;
+  "street"?: string | null;
+  "ward"?: string | null;
+  "district"?: string | null;
+  "province_city"?: string | null;
+};
+
+export type AddressSlot = {
+  "raw"?: string | null;
+  "formatted"?: string | null;
+  "coords"?: Coordinates | null;
+  "components"?: AddressComponents | null;
+  "note"?: string | null;
+  "is_mega_poi"?: boolean;
+  "default_point_used"?: boolean;
+  "status"?: "empty" | "extracted" | "confirmed" | "needs_clarification";
+  "metadata"?: {
+  [key: string]: unknown;
+};
 };
 
 export type AssistantEvent = {
@@ -30,9 +52,9 @@ export type AssistantResponse = {
   "action": string;
   "focus": string | null;
   "candidates": Array<PublicCandidate>;
-  "summary": TripSummary | null;
+  "summary": TripSummary | LegacyTripSummary | null;
   "presentation": PublicPresentation;
-  "booking_status": "collecting_info" | "awaiting_confirmation" | "booking_in_progress" | "booking_unknown" | "booking_failed" | "booked" | "cancel_pending" | "cancel_unknown" | "cancel_failed" | "amendment_pending" | "amendment_unknown" | "cancelled";
+  "booking_status": "collecting" | "confirming" | "ready_to_book" | "canceled" | "operator_required" | "collecting_info" | "awaiting_confirmation" | "booking_in_progress" | "booking_unknown" | "booking_failed" | "booked" | "cancel_pending" | "cancel_unknown" | "cancel_failed" | "amendment_pending" | "amendment_unknown" | "cancelled";
   "reason": string | null;
   "booking": PublicBooking | null;
   "inquiry"?: PublicInquiry | null;
@@ -48,7 +70,7 @@ export type BookingEvent = {
 
 export type BookingResponse = {
   "booking": PublicBooking | null;
-  "status": "collecting_info" | "awaiting_confirmation" | "booking_in_progress" | "booking_unknown" | "booking_failed" | "booked" | "cancel_pending" | "cancel_unknown" | "cancel_failed" | "amendment_pending" | "amendment_unknown" | "cancelled";
+  "status": "collecting" | "confirming" | "ready_to_book" | "canceled" | "operator_required" | "collecting_info" | "awaiting_confirmation" | "booking_in_progress" | "booking_unknown" | "booking_failed" | "booked" | "cancel_pending" | "cancel_unknown" | "cancel_failed" | "amendment_pending" | "amendment_unknown" | "cancelled";
 };
 
 export type Bootstrap = {
@@ -87,7 +109,7 @@ export type ChatSnapshot = {
   "current_cursor": number;
   "has_more": boolean;
   "pending_count": number;
-  "booking_status": "collecting_info" | "awaiting_confirmation" | "booking_in_progress" | "booking_unknown" | "booking_failed" | "booked" | "cancel_pending" | "cancel_unknown" | "cancel_failed" | "amendment_pending" | "amendment_unknown" | "cancelled";
+  "booking_status": "collecting" | "confirming" | "ready_to_book" | "canceled" | "operator_required" | "collecting_info" | "awaiting_confirmation" | "booking_in_progress" | "booking_unknown" | "booking_failed" | "booked" | "cancel_pending" | "cancel_unknown" | "cancel_failed" | "amendment_pending" | "amendment_unknown" | "cancelled";
   "draft_id": string;
   "active_response": AssistantResponse | null;
   "booking": PublicBooking | null;
@@ -95,6 +117,9 @@ export type ChatSnapshot = {
   "blocked_count"?: number;
   "waiting_for_quota"?: boolean;
   "retry_at"?: number | null;
+  "architecture_version"?: string | null;
+  "customer_name"?: string | null;
+  "customer_phone"?: string | null;
 };
 
 export type ChooseInquiryVehicle = {
@@ -109,6 +134,16 @@ export type ConfirmBooking = {
   "prompt_id": string;
   "booking_revision": number;
   "snapshot_fingerprint": string;
+};
+
+export type ConfirmCancel = {
+  "type": "confirm_cancel";
+  "prompt_id": string;
+};
+
+export type Coordinates = {
+  "lat": number;
+  "lng": number;
 };
 
 export type DeliveryAck = {
@@ -127,6 +162,34 @@ export type HealthResponse = {
 
 export type HttpError = {
   "detail": string;
+};
+
+export type LegacyTripSummary = {
+  "pickup": string;
+  "destination": string;
+  "pickup_time": string;
+  "passengers": number;
+  "vehicle_type": "oto_4_cho" | "oto_7_cho" | "xe_may_dien";
+  "vehicle_label": string;
+  "contact_phone": string;
+  "contact_name": string | null;
+  "pickup_note": string | null;
+  "luggage": PublicLuggage | null;
+  "payment_method": "cash" | null;
+  "stops": Array<string> | null;
+  "special_requests": Array<string> | null;
+  "fare": number;
+  "currency": "VND";
+  "quote_expires_at": number;
+  "booking_revision": number;
+  "snapshot_fingerprint": string;
+  "prompt_id": string;
+  "travel_party"?: {
+  [key: string]: number | null;
+} | null;
+  "base_fare"?: number | null;
+  "assistance_fee"?: number | null;
+  "provisional"?: boolean;
 };
 
 export type MessageInput = {
@@ -163,11 +226,13 @@ export type PublicCapabilities = {
   "address_auto_accept_v2"?: boolean;
   "local_address_v2"?: boolean;
   "electric_motorbike"?: boolean;
+  "motorbike"?: boolean;
   "weather"?: boolean;
   "location_confirmation"?: boolean;
   "area_estimate"?: boolean;
   "area_assistance"?: boolean;
   "text_only_chat"?: boolean;
+  "voice_booking"?: boolean;
 };
 
 export type PublicError = {
@@ -209,7 +274,7 @@ export type PublicPresentation = {
 };
 
 export type PublicVehicle = {
-  "code": "oto_4_cho" | "oto_7_cho" | "xe_may_dien";
+  "code": "xe_may" | "oto_4_cho" | "oto_7_cho" | "xe_may_dien";
   "label": string;
   "max_passengers": number;
 };
@@ -254,34 +319,41 @@ export type SelectCandidate = {
 
 export type SessionInput = {
   "client_session_key": string;
+  "customer_phone": string;
+  "customer_name": string;
+};
+
+export type StopoverSlot = {
+  "address": AddressSlot;
+  "order": number;
+};
+
+export type Tariff = {
+  "per_km": number;
+  "currency": "VND";
+  "vehicle_type": "xe_may" | "oto_4_cho" | "oto_7_cho";
+  "source": string;
+  "final_amount_basis": "meter";
 };
 
 export type TripSummary = {
   "pickup": string;
   "destination": string;
   "pickup_time": string;
-  "passengers": number;
-  "vehicle_type": "oto_4_cho" | "oto_7_cho" | "xe_may_dien";
+  "passengers"?: number | null;
+  "vehicle_type": "xe_may" | "oto_4_cho" | "oto_7_cho";
   "vehicle_label": string;
-  "contact_phone": string;
-  "contact_name": string | null;
+  "customer_phone": string;
+  "customer_name": string;
   "pickup_note": string | null;
-  "luggage": PublicLuggage | null;
-  "payment_method": "cash" | null;
-  "stops": Array<string> | null;
-  "special_requests": Array<string> | null;
-  "fare": number;
-  "currency": "VND";
-  "quote_expires_at": number;
+  "general_note": string | null;
+  "stopovers": Array<StopoverSlot>;
+  "tariff": Tariff;
+  "distance_km": number | null;
+  "duration_minutes": number | null;
   "booking_revision": number;
   "snapshot_fingerprint": string;
   "prompt_id": string;
-  "travel_party"?: {
-  [key: string]: number | null;
-} | null;
-  "base_fare"?: number | null;
-  "assistance_fee"?: number | null;
-  "provisional"?: boolean;
 };
 
 export type TurnFailure = {

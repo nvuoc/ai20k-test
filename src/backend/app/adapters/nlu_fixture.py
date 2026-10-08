@@ -13,6 +13,7 @@ import unicodedata
 from typing import Any
 
 from app.contracts.nlu import NluInput, NluResult
+from app.domain.pickup_time import time_expression
 
 from .extractor import ModelReply
 
@@ -168,14 +169,14 @@ def extract_fixture(data: NluInput) -> NluResult:
                 + _LOCATION_END,
                 lower,
             )
-            if pickup:
+            if pickup and not re.search(r"\b(?:gio|thoi gian)\s*$", lower[:pickup.start()]):
                 location = clause[pickup.start(1) : pickup.end(1)]
                 location_lower = _fold(location)
-                if location_lower in {"day", "o day", "nha", "cho cu"} or re.search(
+                if location_lower in {"day", "o day"} or re.search(
                     r"\b(?:hay|hoac)\b", location_lower
                 ):
                     uncertain = True
-                elif not re.match(r"(?:ngay|bay gio|luc|\d{1,2}\s*gio)", location_lower):
+                elif not re.match(r"(?:ngay|bay gio|luc|sau|\d{1,2}(?:\s*gio|[:h]))", location_lower):
                     put("pickup", location)
             destination_matches = re.finditer(
                 r"(?:\b(?:doi\s+)?diem den\s+(?:sang|thanh|la)|\b(?:di den|den|toi|drop[- ]?off|di))\s+(.+?)"
@@ -198,23 +199,27 @@ def extract_fixture(data: NluInput) -> NluResult:
                     r"(?:[0-9]|mot|hai|ba|bon)\s*(?:nguoi|people)|thang\b", _fold(location)
                 ):
                     pass
-                elif _fold(location) in {"nha", "day", "cho cu"}:
+                elif _fold(location) in {"day"}:
                     uncertain = True
                 else:
                     put("destination", location)
 
+        vehicle_mentions = []
         for pattern, code in (
             (r"\b(?:xe\s*(?:o to\s*)?)?(?:4|bon)\s*cho\b", "oto_4_cho"),
             (r"\b(?:xe\s*(?:o to\s*)?)?(?:7|bay)\s*cho\b", "oto_7_cho"),
             (r"\bxe may\b", "xe_may"),
         ):
-            if re.search(pattern, lower) and not re.search(
+            matched = list(re.finditer(pattern, lower))
+            if matched and not re.search(
                 r"(?:khong|dung)\s+(?:can\s+)?" + pattern.replace(r"\b", ""), lower
             ):
                 if lower.startswith("dung xe") and data.booking_state.vehicle_type.value == code:
                     add("confirm", "vehicle_type")
                 else:
-                    put("vehicle_type", code)
+                    vehicle_mentions.append((matched[-1].start(), code))
+        if vehicle_mentions:
+            put("vehicle_type", max(vehicle_mentions)[1])
         if re.search(r"\b(?:16|muoi sau|29|45)\s*cho\b|\blimousine\b", lower):
             uncertain = True
 
@@ -234,24 +239,15 @@ def extract_fixture(data: NluInput) -> NluResult:
         elif re.search(r"(?:tra|thanh toan).*(?:momo|zalopay|chuyen khoan|vi dien tu)", lower):
             uncertain = True
 
-        if re.search(r"\b(?:ngay bay gio|bay gio|don ngay|di ngay)\b", lower):
+        if re.search(r"\b(?:ngay bay gio|bay gio|don ngay|di ngay)\b", lower) and not re.search(r"bảy\s+giờ", clause.lower()):
             put("pickup_time", "ngay bây giờ")
         else:
-            time_matches = list(
-                re.finditer(
-                    rf"(?:(?:ngay mai|mai|hom nay|chieu nay|toi nay|sang mai|ngay\s+\d{{1,2}}/\d{{1,2}}(?:/\d{{4}})?)\s+(?:luc\s+)?)?(?:\d{{1,2}}:\d{{2}}|{_NUMBER}\s*gio(?:\s*\d{{1,2}}(?:\s*phut)?)?)(?:\s*(?:sang|chieu|toi|trua)(?:\s+nay|\s+mai)?)?",
-                    lower,
-                )
-            )
-            relative = re.search(r"(?:\d+\s*phut nua|som hon nua tieng|muon hon nua tieng)", lower)
+            when = time_expression(clause)
             if re.search(rf"{_NUMBER}\s*(?:gio\s*)?(?:hoac|hay)\s*{_NUMBER}\s*gio", lower):
                 uncertain = True
-            elif time_matches:
-                match = time_matches[-1]
-                put("pickup_time", clause[match.start() : match.end()])
-            elif relative:
-                if "hon" not in relative.group() or data.booking_state.pickup_time.value:
-                    put("pickup_time", clause[relative.start() : relative.end()])
+            elif when:
+                if not re.search(r"\b(?:som hon|muon hon)\b", _fold(when)) or data.booking_state.pickup_time.value:
+                    put("pickup_time", when)
                 else:
                     uncertain = True
 
@@ -358,6 +354,8 @@ def extract_fixture(data: NluInput) -> NluResult:
 
         if re.search(r"(?:toi (?:dung|mac)|ao (?:xanh|do|vang)|goi khi den|cho o cong)", lower):
             put("pickup_note", clause.strip())
+        if re.search(r"\b(?:cop rong|khong hut thuoc|ghi chu)\b", lower) and not re.search(r"khong (?:can|co) ghi chu", lower):
+            put("general_note", clause.strip())
 
     # Independent luggage counts in separate clauses describe the combined load.
     luggage_texts = [
@@ -522,6 +520,8 @@ def extract_fixture(data: NluInput) -> NluResult:
         if hasattr(previous, "model_dump"):
             previous = previous.model_dump()
         intent = "provide_info" if previous is None or previous == value else "change_info"
+        if target == "pickup_time" and previous is not None and re.search(r"\b(?:doi|sua)\b", folded):
+            intent = "change_info"
         add(intent, target, value)
     if uncertain:
         add("no_understanding")

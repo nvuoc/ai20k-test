@@ -1,3 +1,5 @@
+> Tài liệu V1–V3 lịch sử. Kiến trúc đang thực thi được chốt tại [architecture_fixed.md](architecture_fixed.md), đối chiếu triển khai tại [ARCHITECTURE_IMPLEMENTATION.md](ARCHITECTURE_IMPLEMENTATION.md).
+
 # Kiến trúc LangGraph và state ParrotGo
 
 ## 1. Thành phần và ranh giới

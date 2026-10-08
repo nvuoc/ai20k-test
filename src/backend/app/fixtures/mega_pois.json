@@ -1,0 +1,10 @@
+{
+  "version": "mega-poi-defaults-1",
+  "notice": "Các điểm mặc định là truy vấn địa điểm, không phải tọa độ tự suy đoán. Map adapter phải xác minh trước khi sử dụng. Dữ liệu fixture chỉ dùng trong sandbox.",
+  "entries": [
+    {"id": "noi_bai", "name": "Sân bay Nội Bài", "aliases": ["Nội Bài", "Sân bay Nội Bài"], "default_pickup_point": "Sân bay Nội Bài T1 cửa 3", "default_dropoff_point": "Sân bay Nội Bài T1 cửa 3"},
+    {"id": "tan_son_nhat", "name": "Sân bay Tân Sơn Nhất", "aliases": ["Tân Sơn Nhất", "Sân bay Tân Sơn Nhất"], "default_pickup_point": "Sân bay Tân Sơn Nhất T1 cửa D1", "default_dropoff_point": "Sân bay Tân Sơn Nhất T1 cửa D1"},
+    {"id": "bach_mai", "name": "Bệnh viện Bạch Mai", "aliases": ["Bạch Mai", "Bệnh viện Bạch Mai"], "default_pickup_point": "Bạch Mai cổng chính", "default_dropoff_point": "Bạch Mai cổng chính"},
+    {"id": "ocean_park_1", "name": "Ocean Park 1", "aliases": ["Ocean Park 1", "Vinhomes Ocean Park 1"], "default_pickup_point": "Ocean Park 1, điểm đại diện thử nghiệm, Hà Nội", "default_dropoff_point": "Ocean Park 1, điểm đại diện thử nghiệm, Hà Nội"}
+  ]
+}

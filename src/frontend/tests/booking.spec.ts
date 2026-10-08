@@ -1,7 +1,15 @@
 import { expect, test, type Page } from '@playwright/test'
-import type { Snapshot } from '../src/api'
+import type { Snapshot, Summary } from '../src/api'
 
 const full = 'Đón tôi ở Nhà hát Lớn Hà Nội, đến Ga Hà Nội, đi ngay, 2 người, xe 4 chỗ, số 0901234567.'
+test.beforeEach(async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('textbox', { name: 'Tên khách hàng' }).fill('An')
+  await page.getByRole('textbox', { name: 'Số điện thoại' }).fill('0901234567')
+  await page.getByRole('button', { name: 'Bắt đầu', exact: true }).click()
+  await expect(page.locator('.message.bot').first()).toBeVisible()
+})
+
 const latestBot = (page: Page) => page.locator('.message.bot .bubble').last()
 
 async function snapshot(page: Page): Promise<Snapshot> {
@@ -24,8 +32,8 @@ async function sendText(page: Page, text: string) {
 
 async function confirmLocations(page: Page) {
   let current = await snapshot(page)
-  for (let attempts = 0; current.active_response?.action === 'confirm_location'; attempts++) {
-    expect(attempts, 'Location consent must finish without repeating a resolved proposal').toBeLessThan(4)
+  for (let attempts = 0; current.active_response?.action === 'confirm_slots'; attempts++) {
+    expect(attempts, 'Location consent must finish without repeating a resolved proposal').toBeLessThan(10)
     expect(current.booking).toBeNull()
     current = await sendText(page, 'Đúng')
   }
@@ -36,7 +44,7 @@ async function prepareBooking(page: Page) {
   await sendText(page, full)
   const current = await confirmLocations(page)
   expect(current.active_response?.action).toBe('confirm_booking')
-  await expect(latestBot(page)).toContainText('Giá thử nghiệm')
+  await expect(latestBot(page)).toContainText('đồng/km')
   return current
 }
 
@@ -50,23 +58,22 @@ test('text conversation books, survives reload and cancels without action contro
   await page.goto('/')
   await expect(page.getByText('Demo offline')).toBeVisible()
   const prepared = await prepareBooking(page)
-  expect(prepared.active_response?.summary?.fare).toBe(46000)
-  await expect(latestBot(page)).toContainText(/46[.,]000/)
+  expect((prepared.active_response?.summary as Summary)?.tariff.per_km).toBe(11500)
+  await expect(latestBot(page)).toContainText(/11[.,]500/)
   const booked = await sendText(page, 'Đồng ý đặt xe')
   expect(booked.booking_status).toBe('booked')
   const bookingId = booked.booking?.booking_id
   expect(bookingId).toMatch(/^SBX-/)
-  await expect(latestBot(page)).toContainText('Đã tạo đơn thử nghiệm')
+  await expect(latestBot(page)).toContainText('Đã tạo cuốc xe thử nghiệm')
   await expect(latestBot(page)).toContainText(bookingId!)
   await page.reload()
   await expect(latestBot(page)).toContainText(bookingId!)
   const requested = await sendText(page, 'Hủy đơn thử nghiệm')
-  expect(requested.booking_status).toBe('booked')
-  await expect(latestBot(page)).toContainText('hủy hẳn')
-  const cancelled = await sendText(page, 'Hủy hẳn')
-  expect(cancelled.booking_status).toBe('cancelled')
-  await expect(latestBot(page)).toContainText('Đã hủy đơn thử nghiệm')
-  await expect(latestBot(page)).toContainText(bookingId!)
+  expect(requested.booking_status).toBe('cancel_pending')
+  await expect(latestBot(page)).toContainText('xác nhận hủy')
+  const cancelled = await sendText(page, 'Đồng ý')
+  expect(cancelled.booking_status).toBe('canceled')
+  await expect(latestBot(page)).toContainText('Yêu cầu đặt xe đã hủy')
   expect(actionRequests).toEqual([])
   expect(errors).toEqual([])
 })
@@ -77,11 +84,11 @@ test('text confirmation with a correction refreshes summary and does not book', 
   const oldSummary = await latestBot(page).innerText()
   const changed = await sendText(page, 'Đồng ý nhưng đổi sang xe 7 chỗ nhé')
   expect(changed.booking).toBeNull()
-  expect(changed.active_response?.action).toBe('confirm_booking')
+  expect(changed.active_response?.action).toBe('confirm_slots')
   await expect(latestBot(page)).toContainText('Ô tô 7 chỗ')
   expect(oldSummary).toContain('Ô tô 4 chỗ')
   await expect(page.getByText(oldSummary, { exact: true })).toBeAttached()
-  await expect(page.locator('.message.bot').filter({ hasText: 'Đã tạo đơn thử nghiệm' })).toHaveCount(0)
+  await expect(page.locator('.message.bot').filter({ hasText: 'Đã tạo cuốc xe thử nghiệm' })).toHaveCount(0)
 })
 
 test('ambiguous destination presents numbered text and accepts a typed number', async ({ page }) => {
@@ -117,7 +124,7 @@ test('route inquiry changes vehicle and promotes through text into a separate su
   await page.goto('/')
   await prepareBooking(page)
   const bookingSummary = await latestBot(page).innerText()
-  await sendText(page, 'Từ Nhà hát Lớn Hà Nội đến Bạch Mai cổng sau giá bao nhiêu?')
+  await sendText(page, 'Từ Nhà hát Lớn Hà Nội đến Bạch Mai cổng sau bao nhiêu km và giá bao nhiêu?')
   const inquiry = await confirmLocations(page)
   expect(inquiry.active_response?.inquiry?.can_use_route).toBe(true)
   expect(inquiry.booking).toBeNull()
@@ -125,7 +132,7 @@ test('route inquiry changes vehicle and promotes through text into a separate su
   await expect(page.getByText(bookingSummary, { exact: true })).toBeAttached()
   await page.reload()
   await expect(latestBot(page)).toContainText('Bạch Mai')
-  const vehicle = await sendText(page, 'Tuyến vừa hỏi nếu đi xe 7 chỗ giá bao nhiêu?')
+  const vehicle = await sendText(page, 'Tuyến vừa hỏi nếu đi xe 7 chỗ bao nhiêu km và giá bao nhiêu?')
   expect(vehicle.active_response?.inquiry?.vehicle).toBe('oto_7_cho')
   await expect(latestBot(page)).toContainText('Ô tô 7 chỗ')
   await expect(page.getByText(bookingSummary, { exact: true })).toBeAttached()
@@ -146,65 +153,25 @@ test('weather answer in offline mode labels its sample source in text', async ({
   expect((await snapshot(page)).booking).toBeNull()
 })
 
-test('broad area proposes a fixed point in text and preserves the quote after reload', async ({ page }) => {
-  await page.goto('/')
-  const requested = await sendText(page, full.replace('Ga Hà Nội', 'Ocean Park 1'))
-  expect(requested.active_response?.action).toBe('ask_area_detail')
-  expect(requested.booking).toBeNull()
-  await expect(latestBot(page)).toContainText('địa chỉ')
-  const service = await sendText(page, 'Không biết địa chỉ')
-  expect(service.active_response?.action).toBe('choose_area_service')
-  const proposal = await sendText(page, 'Điểm cố định')
-  expect(proposal.active_response?.action).toBe('confirm_location')
-  await expect(latestBot(page)).toContainText('điểm cố định')
-  await expect(latestBot(page)).toContainText('điểm đại diện thử nghiệm')
-  const proposalText = await latestBot(page).innerText()
-  await page.reload()
-  await expect(latestBot(page)).toHaveText(proposalText)
+test('Mega destination uses its configured default without asking for a gate', async ({ page }) => {
+  await sendText(page, full.replace('Ga Hà Nội', 'Ocean Park 1'))
   const prepared = await confirmLocations(page)
   expect(prepared.active_response?.action).toBe('confirm_booking')
-  const summary = prepared.active_response!.summary!
-  expect(summary.destination).toContain('Ocean Park 1, điểm đại diện thử nghiệm')
-  expect(summary.provisional ?? false).toBe(false)
-  const summaryText = await latestBot(page).innerText()
+  const summary = prepared.active_response!.summary as Summary
+  expect(summary.destination).toContain('Ocean Park 1')
+  expect(summary.tariff.final_amount_basis).toBe('meter')
   await page.reload()
-  await expect(latestBot(page)).toHaveText(summaryText)
-  const restored = await snapshot(page)
-  expect(restored.active_response?.summary?.destination).toBe(summary.destination)
-  expect(restored.active_response?.summary?.fare).toBe(summary.fare)
-  expect(restored.booking).toBeNull()
+  expect((await snapshot(page)).active_response?.summary).toEqual(summary)
 })
 
-test('area assistance shows the fee in text and separates fee consent from placing an order', async ({ page }) => {
-  await page.goto('/')
-  const requested = await sendText(page, full.replace('Ga Hà Nội', 'Ocean Park 1'))
-  expect(requested.active_response?.action).toBe('ask_area_detail')
-  const services = await sendText(page, 'Không biết địa chỉ')
-  expect(services.active_response?.action).toBe('choose_area_service')
-  await expect(latestBot(page)).toContainText('Phụ phí hỗ trợ thử nghiệm')
-  const fee = await sendText(page, 'Hỗ trợ')
-  expect(fee.active_response?.action).toBe('confirm_assistance')
-  expect(fee.booking).toBeNull()
-  await expect(latestBot(page)).toContainText('chưa cộng phụ phí')
-  await expect(latestBot(page)).toContainText(/20[.,]000/)
-  await expect(latestBot(page)).toContainText('km bổ sung')
-  await expect(latestBot(page)).toContainText('phút hỗ trợ')
-  const consented = await sendText(page, 'Đồng ý phí')
-  expect(consented.booking).toBeNull()
+test('Mega pickup asks once then uses a default with a driver call note', async ({ page }) => {
+  const requested = await sendText(page, full.replace('Nhà hát Lớn Hà Nội', 'Sân bay Nội Bài'))
+  expect(requested.active_response?.action).toBe('clarify_address')
+  await sendText(page, 'Không biết, đừng hỏi nữa')
   const prepared = await confirmLocations(page)
   expect(prepared.active_response?.action).toBe('confirm_booking')
-  const summary = prepared.active_response!.summary!
-  expect(summary.provisional).toBe(true)
-  expect(summary.assistance_fee).toBe(20000)
-  expect(summary.base_fare).toBeGreaterThan(0)
-  expect(summary.fare).toBe(summary.base_fare! + summary.assistance_fee!)
-  await expect(latestBot(page)).toContainText('Giá tuyến tạm tính')
-  await expect(latestBot(page)).toContainText(new RegExp(summary.fare.toLocaleString('en-US').replaceAll(',', '[.,]')))
-  const summaryText = await latestBot(page).innerText()
-  await page.reload()
-  await expect(latestBot(page)).toHaveText(summaryText)
-  expect((await snapshot(page)).booking).toBeNull()
-  const booked = await sendText(page, 'Đồng ý đặt xe')
-  expect(booked.booking_status).toBe('booked')
-  await expect(latestBot(page)).toContainText('Đã tạo đơn thử nghiệm')
+  const summary = prepared.active_response!.summary as Summary
+  expect(summary.pickup_note).toContain('gọi khách')
+  expect(summary.pickup).toContain('T1')
+  expect(prepared.booking).toBeNull()
 })

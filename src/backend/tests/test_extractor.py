@@ -69,7 +69,7 @@ ALL_SLOT_VALUES = {
 def test_input_has_exact_five_fields_and_twelve_slots() -> None:
     payload = input_payload()
     assert len(payload) == 5
-    assert set(payload["booking_state"]) == set(ALL_SLOT_VALUES)
+    assert set(payload["booking_state"]) == set(ALL_SLOT_VALUES) | {"general_note"}
     assert NluInput.model_validate(payload).utterance.asr_confidence is None
     for slot in payload["booking_state"].values():
         assert slot == {"value": None, "confirmed": False}
@@ -732,6 +732,8 @@ def test_provider_schema_closes_every_object_and_requires_all_properties() -> No
         "chit_chat",
         "out_of_scope",
         "no_understanding",
+        "repeat_request",
+        "unclear",
     }
 
 

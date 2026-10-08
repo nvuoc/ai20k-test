@@ -116,6 +116,16 @@ class FixtureMapAdapter:
             return resolution("ambiguous", query, target, candidates=partial[:3],
                               reason="MULTIPLE_PLACES" if len(partial) > 1 else "PARTIAL_COMPONENT_MATCH",
                               clarification="Anh/chị chọn đúng địa điểm và cổng/ga trong danh sách nhé.", context=context)
+        from difflib import SequenceMatcher
+        fuzzy = [(max(SequenceMatcher(None, key, alias).ratio() for alias in self._keys[place["id"]]), place)
+                 for place in self.places]
+        fuzzy.sort(key=lambda pair: pair[0], reverse=True)
+        suggestions = [place for score, place in fuzzy[:3] if score >= .82
+                       and any(set(re.findall(r"\d+[a-z]?", key)) == set(re.findall(r"\d+[a-z]?", alias))
+                               for alias in self._keys[place["id"]])]
+        if suggestions:
+            return resolution("ambiguous", query, target, candidates=suggestions,
+                              reason="FUZZY_NAME_MATCH", clarification="Có phải bạn muốn nói địa điểm này không?", context=context)
         return resolution("not_found", query, target, reason="NO_MATCH",
                           clarification="Em chưa tìm thấy địa điểm này trong dữ liệu thử nghiệm. Anh/chị thử một địa điểm mẫu hoặc bổ sung địa chỉ nhé.", context=context, ttl=30)
 
@@ -123,9 +133,9 @@ class FixtureMapAdapter:
         self, pickup: dict[str, Any], destination: dict[str, Any], vehicle_type: str | None = None,
         *, include_traffic: bool = False, departure_time: datetime | None = None,
     ) -> dict[str, Any]:
-        if vehicle_type not in {None, "oto_4_cho", "oto_7_cho", "xe_may_dien"}:
+        if vehicle_type not in {None, "xe_may", "oto_4_cho", "oto_7_cho", "xe_may_dien"}:
             raise MapProviderError("UNSUPPORTED_VEHICLE_PROFILE")
-        profile = "motorcycle" if vehicle_type == "xe_may_dien" else "car"
+        profile = "motorcycle" if vehicle_type in {"xe_may", "xe_may_dien"} else "car"
         pair = (pickup.get("id"), destination.get("id"), profile)
         row = self._routes.get(pair)
         if row is None:

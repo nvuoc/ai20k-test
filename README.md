@@ -1,8 +1,15 @@
-# ParrotGo — MVP V3, văn bản khách → văn bản bot
+# ParrotGo — kiến trúc Text CLI và lõi đặt xe dùng chung
+
+Luồng web giọng nói LiveKit Cloud + LiveKit Agents + Azure Speech STT/TTS:
+xem [VOICE_SETUP.md](VOICE_SETUP.md). Khách nhập tên/SĐT rồi nói chuyện; bot
+chỉ đưa tối đa hai kết quả đầu VietMap để chọn. Phần mô tả chat/CLI bên dưới
+vẫn áp dụng khi `VOICE_ENABLED=false`.
+
+Triển khai theo **architecture_fixed.md**: phiên bắt buộc tên/SĐT và có UUID riêng; booking_slots là dữ liệu gốc; xác nhận theo target_slots; hành khách tùy chọn; điểm dừng có tọa độ; giá chỉ theo km; hủy cần xác nhận riêng. Lịch sử địa chỉ CRM tra bằng SĐT. Các đoạn báo cáo V1–V3 được giữ làm tài liệu lịch sử.
 
 React + TypeScript, FastAPI, LangGraph và SQLite. Groq `openai/gpt-oss-120b` diễn giải lời khách, Gemini `gemini-3.5-flash-lite` dự phòng; VietMap tìm địa điểm/tuyến; Open-Meteo cung cấp dự báo. Cùng một lõi phục vụ giao diện hội thoại và hàm Python nhận/trả văn bản. Giá và đơn `SBX-` là sandbox, chưa điều phối tài xế thật.
 
-V2 tách **tuyến hỏi thử** khỏi **chuyến đang đặt**. Khách có thể hỏi giá/km/thời gian/thời tiết của C→D trong khi đặt A→B, chọn địa điểm/xe cho tuyến hỏi thử, tiếp tục A→B hoặc dùng C→D để lập tóm tắt mới. Chỉ xác nhận riêng tóm tắt mới mới tạo đơn. Thiết kế: [MVP_PLAN.md](MVP_PLAN.md); kết quả kiểm chứng: [MVP_STATUS.md](MVP_STATUS.md).
+V2 tách **tuyến hỏi thử** khỏi **chuyến đang đặt**. Khách có thể hỏi giá/km/thời gian/thời tiết của C→D trong khi đặt A→B, chọn địa điểm/xe cho tuyến hỏi thử, tiếp tục A→B hoặc dùng C→D để lập tóm tắt mới. Chỉ xác nhận riêng tóm tắt mới mới tạo đơn. Thiết kế hiện hành: [architecture_fixed.md](architecture_fixed.md); chi tiết triển khai: [ARCHITECTURE_IMPLEMENTATION.md](ARCHITECTURE_IMPLEMENTATION.md); kết quả kiểm chứng: [MVP_STATUS.md](MVP_STATUS.md).
 
 ## Cấu trúc dự án
 
@@ -12,7 +19,8 @@ src/
   frontend/    # Giao diện React + TypeScript và tests
   scripts/     # Khởi tạo cấu hình và kiểm tra dữ liệu demo
 README.md
-MVP_PLAN.md    # Kế hoạch MVP duy nhất
+architecture_fixed.md # Kiến trúc hiện hành
+MVP_PLAN.md    # Kế hoạch V1–V3 lịch sử
 MVP_STATUS.md  # Kết quả kiểm chứng và giới hạn
 ```
 
@@ -27,7 +35,9 @@ from app.text import main
 
 reply: str = main(
     "Từ Nhà hát Lớn Hà Nội đến Ga Hà Nội giá bao nhiêu?",
-    session_id="khach-001",
+    session_id="khach-001",  # Khóa tiếp tục hội thoại; session_id lưu DB là UUID riêng
+    customer_phone="0901234567",
+    customer_name="An",
 )
 print(reply)
 reply = main("Đi bao lâu?", session_id="khach-001")
@@ -41,23 +51,31 @@ Dùng lại `session_id` để giữ ngữ cảnh qua nhiều lượt và restar
 from app.text import TextBot
 
 async with TextBot() as bot:
-    reply = await bot.ask("Bạn là ai?", session_id="khach-001")
+    reply = await bot.ask("Bạn là ai?", session_id="khach-001", customer_phone="0901234567", customer_name="An")
     reply = await bot.ask("Có những loại xe nào?", session_id="khach-001")
 ```
 
-Mặc định lượt kế tiếp xác nhận lời bot trước đã được nhận. Với TTS chưa phát xong, truyền `acknowledge_previous=False` vào `bot.ask`; bot vẫn kiểm tra lời xác nhận đúng tóm tắt và hiệu lực giá trước khi tạo đơn. Text adapter dùng `data/text.sqlite` và `data/text_checkpoints.sqlite`, tách khỏi phiên HTTP; quota Gemini vẫn dùng chung. Chạy một runtime/process cho mỗi cặp database.
+Mặc định lượt kế tiếp xác nhận lời bot trước đã được nhận. Với TTS chưa phát xong, truyền `acknowledge_previous=False` vào `bot.ask`; bot vẫn kiểm tra lời xác nhận đúng tóm tắt và phạm vi thông tin đã xác nhận trước khi tạo cuốc. Text adapter dùng `data/text.sqlite` và `data/text_checkpoints.sqlite`, tách khỏi phiên HTTP; quota Gemini vẫn dùng chung. Chạy một runtime/process cho mỗi cặp database.
 
 CLI từ thư mục dự án:
 
 ```powershell
-src/backend/.venv/Scripts/python.exe src/backend/main.py "Bạn là ai?" --session khach-001
-src/backend/.venv/Scripts/python.exe src/backend/main.py --session khach-001
+src/backend/.venv/Scripts/python.exe src/backend/main.py "Bạn là ai?" --session khach-001 --phone 0901234567 --name An
+src/backend/.venv/Scripts/python.exe src/backend/main.py --session khach-001 --phone 0901234567 --name An
 src/backend/.venv/Scripts/python.exe src/backend/examples/converse_text.py
 ```
 
 Lệnh cuối chạy demo offline trong database tạm, gồm hỏi tuyến khác, dùng tuyến, xác nhận và hủy.
 
 ## Chạy trên Windows
+
+Trong Windows Terminal dùng PowerShell, chạy script bằng đường dẫn tương đối (có tiền tố `.\`):
+
+```powershell
+.\run-windows.bat
+```
+
+Script tự chuyển về thư mục dự án, cài dependencies, build frontend và khởi động server. Nếu đang dùng Command Prompt, chạy `run-windows.bat`. Khi có lỗi, xem thông báo ngay phía trên dòng `ERROR: Setup or server startup failed`.
 
 Yêu cầu Python 3.12, Node 22.12+ và uv. Từ thư mục dự án:
 
@@ -107,17 +125,21 @@ Gỡ override để dùng cấu hình Groq/Gemini: `Remove-Item Env:APP_PROFILE`
 
 ## Dùng thử
 
+Tra cứu vị trí chỉ cần tên địa điểm hoặc địa danh: “Nhà hát Lớn Hà Nội ở đâu?”, “Chợ Bến Thành nằm ở đâu?” hoặc “Địa chỉ của Ga Hà Nội là gì?”. Bot trả vị trí/địa chỉ từ nguồn bản đồ đang cấu hình, hỏi lại tên/khu vực khi thiếu thông tin và cho chọn số hoặc tên nếu có nhiều kết quả. Với khu vực rộng như Ocean Park 1, bot trả thông tin địa danh có nguồn. Tra cứu giữ nguyên thông tin chuyến đang đặt; dữ liệu offline được ghi rõ là thử nghiệm.
+
+Đặt trước bằng cách nêu giờ đón, ví dụ “Đón tôi ở Nhà hát Lớn Hà Nội, đến Ga Hà Nội, ngày mai 08:00, 2 người, xe 4 chỗ, số 0901234567”. Có thể dùng “30 phút nữa”, “sau 2 tiếng” hoặc “18:30 ngày 05/10/2026”. Bot hỏi lại giờ/buổi khi thiếu, từ chối ngày/giờ không hợp lệ hoặc đã qua và đọc lại ngày/giờ theo múi giờ Việt Nam trước khi tạo đơn. Thời điểm tương đối được chốt theo lúc gửi tin nhắn, giữ qua các lượt và restart. Đổi giờ trước khi tạo đơn cần một tóm tắt và lời xác nhận mới. Đơn `SBX-` lưu `pickup_schedule` gồm `mode`, `pickup_at` (ISO 8601 có timezone) và `timezone`; đây vẫn là booking sandbox.
+
 > Đón tôi ở Nhà hát Lớn Hà Nội, đến Ga Hà Nội, đi ngay, 2 người, xe 4 chỗ, số 0901234567.
 
 Bot hỏi xác nhận trực tiếp từng địa điểm duy nhất bằng văn bản. Trả lời “đúng” cho nơi đang được hỏi; sau đó bot trình bày tóm tắt và giá, khách trả lời “đồng ý đặt xe” để tạo đơn thử nghiệm. Mọi lựa chọn trong đoạn chat đều bằng văn bản; nhiều địa điểm được đánh số để khách trả lời “cái thứ hai” hoặc tên địa điểm. Khách cũng có thể nhắn “hủy đơn” hoặc “tiếp tục chuyến đang đặt”. Giao diện giữ vị trí khi cuộn lên đọc lịch sử.
 
-Địa danh rộng như Ocean Park 1/thôn Lai Xá được hỏi địa chỉ cụ thể trước. Nếu không biết, bot đề xuất điểm đại diện có nguồn để tính tuyến; điểm đón vẫn cần nơi đứng cụ thể. `AREA_ASSISTANCE_ENABLED=true` chỉ bật gói **hỗ trợ sandbox** có giá/giới hạn tại `app/fixtures/assistance_policy.json`; phí mẫu 20.000/15.000 đ không phải giá vận hành. Khách đồng ý hỗ trợ sẽ thấy giá tuyến tạm chưa cộng phí, rồi xác nhận phí riêng và xác nhận đơn riêng. Live cần registry điểm đại diện đã kiểm chứng tại `SERVICE_AREA_PATH`; dữ liệu fixture không được đưa vào bản đồ live.
+Pickup vùng/đường rộng cần số nhà hoặc điểm mốc. Pickup Mega POI chỉ hỏi vị trí nhỏ một lượt; khi khách không biết, bot dùng điểm mặc định đã cấu hình, xác minh bằng bản đồ và ghi chú tài xế gọi khách. Destination Mega POI dùng điểm mặc định mà không ép hỏi cổng. Tọa độ phải có nguồn; không tìm được điểm đón an toàn thì chuyển `operator_required`. Cấu hình điểm mặc định tại `MEGA_POI_PATH`; dữ liệu sandbox cần thay bằng registry vận hành trước khi phục vụ khách thật.
 
 Sau khi hỏi thời gian tuyến, khách có thể hỏi “sao đi lâu thế?”. Bot giải thích bằng facts của đúng tuyến vừa trao đổi. Chỉ báo tình trạng giao thông hiện tại khi nguồn trả dữ liệu hợp lệ còn hạn; chưa có bằng chứng ETA đã hiệu chỉnh giao thông thì bot nói rõ thời gian là ước tính từ nhà cung cấp.
 
-Sáu thông tin cần có: điểm đón, điểm đến, đi ngay, số người, loại xe và điện thoại. Đặt hộ hỏi thêm tên người đi. Chuyến có sân bay được xác minh hỏi hành lý; sức chứa xe/hành lý được kiểm tra. Xe sandbox 4 chỗ tối đa 4 khách, xe 7 chỗ tối đa 6 khách. Điện thoại kiểm tra định dạng, chưa xác thực sở hữu.
+Sáu thông tin cần có: điểm đón, điểm đến, giờ đón (đi ngay hoặc đặt trước), số người, loại xe và điện thoại. Đặt hộ hỏi thêm tên người đi. Chuyến có sân bay được xác minh hỏi hành lý; sức chứa xe/hành lý được kiểm tra. Xe sandbox 4 chỗ tối đa 4 khách, xe 7 chỗ tối đa 6 khách. Điện thoại kiểm tra định dạng, chưa xác thực sở hữu.
 
-Đặt trước, khứ hồi, nhiều điểm dừng, ghế trẻ em/xe lăn/thú cưng và sửa đơn đã tạo chưa được hỗ trợ. Hỏi thử giá/thời tiết ngày mai không thay đổi thời gian đặt xe. Địa chỉ có một thực thể khớp bằng chứng được nhận và đọc lại; địa chỉ tương đối được tìm mốc rồi hỏi chi tiết điểm hẹn, không suy tọa độ phía đối diện/cổng khác.
+Khứ hồi, nhiều điểm dừng, ghế trẻ em/xe lăn/thú cưng và sửa đơn đã tạo chưa được hỗ trợ. Hỏi thử giá/thời tiết ngày mai không thay đổi thời gian đặt xe. Địa chỉ có một thực thể khớp bằng chứng được nhận và đọc lại; địa chỉ tương đối được tìm mốc rồi hỏi chi tiết điểm hẹn, không suy tọa độ phía đối diện/cổng khác.
 
 ## Thời tiết Open-Meteo
 
@@ -201,13 +223,15 @@ Fixture eval là regression của các câu đã phát triển, không chứng m
 
 Backend chạy như trên; terminal thứ hai `npm.cmd --prefix src/frontend run dev`, mở http://127.0.0.1:5173. Vite proxy `/api` về 8000. Request ghi kiểm tra Origin; cookie signed/HttpOnly/SameSite. Chưa có OTP/tài khoản.
 
-[MVP_PLAN.md](MVP_PLAN.md) là kế hoạch MVP duy nhất, hợp nhất nền chat và hội thoại V2. [Backend README](src/backend/README.md) có chi tiết API/adapter. Holdout 160 ca hội thoại, 400 ca địa chỉ và 20 hội thoại nghiệm thu độc lập trong V2 vẫn là việc đánh giá tiếp theo; các regression/smoke phát triển không thay thế chúng.
+[architecture_fixed.md](architecture_fixed.md) là kiến trúc hiện hành; [MVP_PLAN.md](MVP_PLAN.md) lưu kế hoạch V1–V3 lịch sử, hợp nhất nền chat và hội thoại V2. [Backend README](src/backend/README.md) có chi tiết API/adapter. Holdout 160 ca hội thoại, 400 ca địa chỉ và 20 hội thoại nghiệm thu độc lập trong V2 vẫn là việc đánh giá tiếp theo; các regression/smoke phát triển không thay thế chúng.
 
 
 ## Bộ tài liệu
 
 | Tài liệu | Nội dung |
 | --- | --- |
+| [architecture_fixed.md](architecture_fixed.md) | Kiến trúc hiện hành. |
+| [ARCHITECTURE_IMPLEMENTATION.md](ARCHITECTURE_IMPLEMENTATION.md) | Đối chiếu yêu cầu với mã nguồn, migration và cấu hình. |
 | [MVP_PLAN.md](MVP_PLAN.md) | Phạm vi, versions, lộ trình và mục tiêu nghiệm thu. |
 | [langgraph.md](langgraph.md) | State, ba node V2, consent, ledger và recovery. |
 | [llmextractor.md](llmextractor.md) | TurnInput và ExtractorTurnResult; NluInput/NluResult chỉ cho legacy. |
@@ -215,4 +239,4 @@ Backend chạy như trên; terminal thứ hai `npm.cmd --prefix src/frontend run
 | [llmplanner.md](llmplanner.md) | Phản hồi văn bản và hướng mở rộng voice/audio. |
 | [MVP_STATUS.md](MVP_STATUS.md) | Bằng chứng development/live và giới hạn chưa nghiệm thu. |
 
-Versions được chốt tại [bảng contract](MVP_PLAN.md#contracts). ExtractorTurnResult là bí danh tài liệu cho class TurnResult trong contracts/turn.py; phản hồi HTTP là AssistantResponse. Map status thành công là resolved, trường địa điểm là place; dữ liệu chi tiết theo model đang thực thi. Các ví dụ/fixture không phải dữ liệu vận hành thật.
+State hiện hành là `architecture-fixed-1`, schema 7. Các phiên bản V1–V3 trong [MVP_PLAN.md](MVP_PLAN.md#contracts) là lịch sử. ExtractorTurnResult là bí danh tài liệu cho class TurnResult trong contracts/turn.py; phản hồi HTTP là AssistantResponse. Map status thành công là resolved, trường địa điểm là place; dữ liệu chi tiết theo model đang thực thi. Các ví dụ/fixture không phải dữ liệu vận hành thật.

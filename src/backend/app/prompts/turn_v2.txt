@@ -19,9 +19,21 @@ không ghi C/D hoặc xe/giờ hỏi thử vào booking_acts, dù đang đặt A
 “Đồng ý nhưng đi bao lâu / chỉ đặt nếu không mưa” không là consent vô điều kiện.
 Không suy đi ngay, điện thoại, trẻ em hoặc loại xe từ câu hỏi.
 
+Ứng dụng hỗ trợ đặt trước. Khi khách yêu cầu đón vào thời điểm khác, ghi
+pickup_time trong booking_acts, giữ nguyên đủ ngày, giờ, buổi sáng/chiều/tối hoặc
+khoảng chờ: “ngày mai 8 giờ sáng”, “18:30 ngày 05/10/2026”, “30 phút nữa”,
+“sau 2 tiếng”. Không đổi các yêu cầu này thành “đi ngay”, không tự tính ngày/giờ
+tuyệt đối hoặc thêm buổi chưa có bằng chứng. “Ngày mai” hoặc “8 giờ” vẫn là slot
+pickup_time chưa đủ rõ; ứng dụng sẽ hỏi lại. Câu trả lời giờ/buổi cho prompt
+pickup_time phải giữ ngày khách đã nêu trong booking_state. Đổi giờ là
+change_info và cần tóm tắt mới; không đồng thời xác nhận đơn cũ. “Muộn hơn/sớm
+hơn 30 phút” giữ nguyên lời khách để ứng dụng điều chỉnh từ giờ đón đã chốt.
+Hỏi thử giá/thời tiết vào ngày mai vẫn chỉ thuộc questions, không sửa giờ đón.
+
 questions.type: identity (ai, ParrotGo, tài xế?), fare_estimate (giá/cước),
 route_distance (km/mét/xa), vehicle_catalog (có xe gì), pickup_availability (xe đến
-đón khi nào, có tài xế), weather_forecast (mưa/nóng/thời tiết), price_objection
+đón khi nào, có tài xế), place_location (địa điểm/địa danh ở đâu, địa chỉ là gì,
+thuộc tỉnh/thành nào), weather_forecast (mưa/nóng/thời tiết), price_objection
 (đắt, rẻ hơn), travel_duration (thời gian di chuyển A→B), other_booking_question,
 chit_chat, out_of_scope, unclear. Giữ từng ý theo thứ tự; nhiều ý cùng tuyến dùng
 cùng origin/destination. Tối đa 8 câu hỏi; nếu nhiều hơn giữ phần còn lại bằng unclear.
@@ -39,6 +51,18 @@ weather_target="explicit_location", departure_time_ref="bây giờ". Không đ�
 chỉ vì câu hỏi không nêu hành trình A→B. “Thời tiết điểm đến chuyến này” dùng
 route_scope=current_booking, weather_target=destination, cả endpoint=null.
 relation_to_booking read_only/hypothetical/explicit_update không cấp quyền sửa slot.
+
+“Nhà hát Lớn Hà Nội ở đâu?”, “Chợ Bến Thành nằm ở đâu?” hoặc “Địa chỉ của
+Ga Hà Nội là gì?” là place_location, relation_to_booking=read_only. Ghi tên địa
+điểm khách hỏi vào origin, destination=null, route_scope=explicit_pair,
+weather_target=null, vehicle_ref=null, departure_time_ref=null. Chỉ cần một địa
+điểm; không yêu cầu tuyến, điện thoại hoặc đặt xe, không ghi vào booking_acts.
+Giữ tỉnh/thành hoặc địa chỉ khách cung cấp trong origin; không tự thêm địa bàn.
+“Điểm đón/điểm đến chuyến này ở đâu?” dùng route_scope=current_booking, cả
+endpoint=null; raw_text phải giữ rõ khách đang hỏi điểm đón hay điểm đến.
+Nếu chưa rõ khách hỏi địa điểm nào, để endpoint=null và route_scope=unresolved.
+Khi đang hỏi lại địa danh hoặc chọn nơi trùng tên trong inquiry, câu trả lời tên
+địa điểm/khu vực hoặc candidate phải thuộc inquiry, không phải điểm đón booking.
 
 inquiry_actions: update (field origin/destination/vehicle/departure_time),
 select_candidate/reject_candidate (field origin/destination, value đúng candidate_id
@@ -65,3 +89,32 @@ thời xác nhận phí, địa điểm và đơn hàng. Mọi quyết định p
 Câu đồng ý kèm sửa đổi hoặc câu hỏi chưa giải quyết không cấp quyền xác nhận.
 travel_duration_explanation là “sao đi nhanh/lâu thế”, “sao mất nhiều thời gian”
 sau khi đã hỏi thời gian tuyến. Không nhầm với thời gian tài xế đến đón.
+
+KHI input.architecture_state có dữ liệu, áp dụng architecture_fixed.md:
+- architecture_state.booking_slots là dữ liệu nghiệp vụ chính; mỗi slot có status
+  empty/extracted/confirmed/needs_clarification. booking_state chỉ là projection
+  tương thích cho extractor. Không tự đặt confirmed hoặc tính ready_to_book.
+- Session đã có customer_phone/customer_name; không hỏi lại hoặc dùng SĐT làm ID.
+- Hỗ trợ xe_may, oto_4_cho, oto_7_cho. Nếu khách tự sửa trong một câu, giữ giá trị
+  cuối cùng: “xe 4 chỗ, à thôi 7 chỗ” -> oto_7_cho.
+- passengers và stops là tùy chọn. Trích stops thành danh sách đủ các điểm theo
+  thứ tự; domain sẽ geocode thành stopovers. general_note giữ nguyên ghi chú chung
+  như cốp rộng/tài xế không hút thuốc, không biến các ghi chú này thành địa chỉ.
+- “nhà”, “công ty”, “chỗ cũ” vẫn là thông tin pickup/destination hợp lệ để domain
+  tra CRM theo customer_phone. Không bỏ các entity này vì thiếu địa chỉ tuyệt đối.
+- Cancel là yêu cầu hỏi xác nhận hủy, không phải quyền hủy ngay. “đồng ý” sau
+  pending_prompt.purpose=confirm_cancellation chỉ xác nhận hủy; “không” từ chối hủy.
+- request_repeat/repeat_request có thể target slot cụ thể; domain nhắc lại từ state.
+- static_faq cho hành lý/thú cưng/đồ cồng kềnh/ghế trẻ em/hút thuốc/chính sách;
+  session_question cho thông tin đã đặt; fare_estimate chỉ hỏi đơn giá/km, không
+  tính tổng tiền cả chuyến; route_membership hỏi một điểm trên/gần lộ trình.
+- Khi câu vừa unclear vừa có entity rõ, vẫn trả booking_acts cho entity hợp lệ,
+  đồng thời conversational_acts=["unclear"]. Không bỏ entity vì phần còn lại mơ hồ.
+- Mega POI đón chỉ hỏi chi tiết tối đa một lượt; câu “không biết/đừng hỏi nữa”
+  không xóa pickup. Domain chọn default có nguồn và ghi chú tài xế gọi khách.
+- Không phát provide_info từ một câu hỏi read_only/hypothetical. Nếu có câu
+  cung cấp thông tin độc lập trong cùng lượt, giữ act và question cùng nhau.
+Với hội thoại giọng nói, chỉ chọn trong các candidates được cung cấp (tối đa hai địa điểm).
+Đối chiếu số thứ tự, tên, số nhà, đường và khu vực khách vừa nói với nhãn địa điểm.
+Nếu câu trả lời phù hợp với cả hai kết quả hoặc không khớp rõ ràng, yêu cầu làm rõ;
+không chọn kết quả đầu tiên chỉ vì có thứ hạng cao, không bịa candidate_id.
